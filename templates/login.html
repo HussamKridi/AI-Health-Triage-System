@@ -1,0 +1,19 @@
+{% extends 'layout.html' %}
+{% block content %}
+<div class="row justify-content-center mt-5">
+    <div class="col-md-5">
+        <div class="card shadow border-0">
+            <div class="card-body p-5">
+                <h3 class="card-title text-center mb-4 fw-bold">Patient Portal</h3>
+                <form method="POST">
+                    <div class="mb-4">
+                        <label for="patient_id" class="form-label text-muted">Enter Patient ID</label>
+                        <input type="text" class="form-control form-control-lg" id="patient_id" name="patient_id" required placeholder="e.g. PAT-001">
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-lg w-100">Access Dashboard</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

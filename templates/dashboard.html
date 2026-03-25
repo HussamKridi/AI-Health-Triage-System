@@ -1,0 +1,162 @@
+{% extends 'layout.html' %}
+{% block content %}
+<style>
+    /* Brighter Royal Blue Gradient Theme */
+    .card-gradient-blue {
+        background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+        color: white;
+        transition: all 0.3s ease;
+        border-radius: 15px;
+    }
+    /* Interactive lift effect */
+    .card-gradient-blue:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.15) !important;
+    }
+
+    .status-card {
+        border-radius: 15px;
+    }
+
+    /* Brighter Gradients for Triage Status */
+    .bg-gradient-success { background: linear-gradient(135deg, #10b981 0%, #34d399 100%) !important; }
+    .bg-gradient-warning { background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%) !important; }
+    .bg-gradient-danger { background: linear-gradient(135deg, #ef4444 0%, #f87171 100%) !important; }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="fw-bold">Dashboard <span class="text-muted fs-4">| {{ patient_id }}</span></h2>
+    <a href="{{ url_for('routes.logout') }}" class="btn btn-outline-danger">Logout</a>
+</div>
+
+{% if latest_vital %}
+    {% set status_class = 'bg-gradient-success' if latest_vital.classification == 'Green' else ('bg-gradient-warning text-dark' if latest_vital.classification == 'Yellow' else 'bg-gradient-danger') %}
+    
+    <div class="card text-white {{ status_class }} mb-4 shadow border-0 status-card">
+        <div class="card-body p-4 text-center">
+            <h5 class="card-title text-uppercase fw-bold mb-0 opacity-75">Current Triage Status</h5>
+            <h1 class="display-3 fw-bold">{{ latest_vital.classification }}</h1>
+        </div>
+    </div>
+
+  <div class="card shadow-sm mb-5 border-0" style="border-radius: 15px; background: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%);">
+        <div class="card-body d-flex align-items-center p-4">
+            <div class="me-4 fs-1">🤖</div>
+            <div>
+                <h6 class="fw-bold mb-1 text-uppercase text-muted" style="letter-spacing: 1px;">Gemini AI Analysis</h6>
+                <span id="ai-source" style="display:none;">{{ latest_vital.ai_recommendation }}</span>
+                <p id="ai-text" class="mb-0 text-dark fs-4 fw-medium" style="min-height: 1.5em; border-right: 2px solid #212529; display: inline-block;"></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const sourceElement = document.getElementById('ai-source');
+            if (!sourceElement) return;
+
+            const sourceText = sourceElement.innerText;
+            const targetElement = document.getElementById('ai-text');
+            let index = 0;
+
+            function typeWriter() {
+                if (index < sourceText.length) {
+                    targetElement.innerHTML += sourceText.charAt(index);
+                    index++;
+                    // 30ms delay mimics the rapid typing feel of Gemini
+                    setTimeout(typeWriter, 30); 
+                } else {
+                    // Remove the "cursor" line when typing finishes
+                    targetElement.style.borderRight = "none";
+                }
+            }
+            
+            if(sourceText.trim().length > 0) {
+                typeWriter();
+            }
+        });
+    </script>
+
+    <div class="row g-4 mb-5">
+        <div class="col-md-4">
+            <div class="card shadow border-0 card-gradient-blue h-100 text-center">
+                <div class="card-body py-4">
+                    <h6 class="text-uppercase fw-bold opacity-75">SpO2</h6>
+                    <h2 class="display-6 mb-0">{{ latest_vital.spo2 }}%</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card shadow border-0 card-gradient-blue h-100 text-center">
+                <div class="card-body py-4">
+                    <h6 class="text-uppercase fw-bold opacity-75">Temperature</h6>
+                    <h2 class="display-6 mb-0">{{ latest_vital.temperature }}°C</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card shadow border-0 card-gradient-blue h-100 text-center">
+                <div class="card-body py-4">
+                    <h6 class="text-uppercase fw-bold opacity-75">Heart Rate</h6>
+                    <h2 class="display-6 mb-0">{{ latest_vital.heart_rate }} BPM</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endif %}
+
+    <div class="card shadow-sm mb-5 border-0 bg-white" style="border-radius: 15px;">
+        <div class="card-header bg-white fw-bold text-muted text-uppercase border-bottom py-3">Manual Data Entry</div>
+        <div class="card-body p-4">
+            <form action="{{ url_for('routes.add_vitals') }}" method="POST" class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label fw-bold text-muted">SpO2 (%)</label>
+                    <input type="number" step="0.1" class="form-control" name="spo2" placeholder="98" required>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-bold text-muted">Temp (°C)</label>
+                    <input type="number" step="0.1" class="form-control" name="temperature" placeholder="37.5" required>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-bold text-muted">HR (BPM)</label>
+                    <input type="number" class="form-control" name="heart_rate" placeholder="75" required>
+                </div>
+                <div class="col-md-3 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100 fw-bold shadow-sm">Submit Vitals</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+{% if latest_vital %}
+    <h4 class="fw-bold mb-3">Historical Readings</h4>
+    <div class="table-responsive shadow-sm rounded-4">
+        <table class="table table-hover bg-white mb-0 align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>Time</th>
+                    <th>SpO2</th>
+                    <th>Temp</th>
+                    <th>HR</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for vital in vitals %}
+                <tr>
+                    <td class="text-muted small">{{ vital.timestamp }}</td>
+                    <td>{{ vital.spo2 }}%</td>
+                    <td>{{ vital.temperature }}°C</td>
+                    <td>{{ vital.heart_rate }}</td>
+                    <td>
+                        <span class="badge bg-{{ 'success' if vital.classification == 'Green' else ('warning text-dark' if vital.classification == 'Yellow' else 'danger') }}">
+                            {{ vital.classification }}
+                        </span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% endif %}
+{% endblock %}
