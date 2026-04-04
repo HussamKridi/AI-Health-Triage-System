@@ -1,98 +1,116 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, jsonify, request
+
 from models import get_db_connection
-from classifier import classify_vitals
-import json
-
-api_bp = Blueprint('api', __name__)
+from triage_flow import continue_triage, load_json, run_initial_triage
 
 
-def _load_json(value, default):
-    if not value:
-        return default
-    try:
-        return json.loads(value)
-    except json.JSONDecodeError:
-        return default
+api_bp = Blueprint("api", __name__)
 
-@api_bp.route('/vitals', methods=['POST'])
+
+def _parse_payload(data):
+    return {
+        "age": int(data["age"]),
+        "gender": str(data["gender"]),
+        "weight": float(data["weight"]),
+        "height": float(data["height"]),
+        "spo2": float(data["spo2"]),
+        "temperature": float(data["temperature"]),
+        "heart_rate": int(data["heart_rate"]),
+    }
+
+
+@api_bp.route("/vitals", methods=["POST"])
 def receive_vitals():
-    data = request.get_json()
-    if not data or 'patient_id' not in data:
-        return jsonify({"error": "Invalid input"}), 400
+    data = request.get_json() or {}
+    required = {"patient_id", "age", "gender", "weight", "height", "spo2", "temperature", "heart_rate"}
+    if not required.issubset(data):
+        return jsonify({"error": "Missing required triage fields"}), 400
 
-    patient_id = data['patient_id']
-    spo2 = float(data.get('spo2', 0))
-    temperature = float(data.get('temperature', 0))
-    heart_rate = int(data.get('heart_rate', 0))
-
-    result = classify_vitals(spo2, temperature, heart_rate)
-    classification = result["triage_response"].get("risk_label", result["risk_level"])
-    triage_response = json.dumps(result["triage_response"])
-    conversation_history = json.dumps([])
+    patient_id = data["patient_id"]
+    payload = _parse_payload(data)
+    state = run_initial_triage(payload)
 
     conn = get_db_connection()
     conn.execute(
-        'INSERT INTO vitals (patient_id, spo2, temperature, heart_rate, classification, ai_recommendation, conversation_history) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        (patient_id, spo2, temperature, heart_rate, classification, triage_response, conversation_history)
+        """
+        INSERT INTO vitals
+        (patient_id, age, gender, weight, height, spo2, temperature, heart_rate, classification,
+         triage_status, ai_recommendation, conversation_history, model_assessment, disagreement_logged, final_source)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            patient_id,
+            payload["age"],
+            payload["gender"],
+            payload["weight"],
+            payload["height"],
+            payload["spo2"],
+            payload["temperature"],
+            payload["heart_rate"],
+            state["classification"],
+            state["triage_status"],
+            state["ai_recommendation_json"],
+            state["conversation_history_json"],
+            state["model_assessment_json"],
+            state["disagreement_logged"],
+            state["final_source"],
+        ),
     )
-    vital_id = conn.execute('SELECT last_insert_rowid()').fetchone()[0]
+    vital_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
     conn.commit()
     conn.close()
 
-    return jsonify({"status": "success", "vital_id": vital_id, **result}), 201
+    return jsonify(
+        {
+            "status": "success",
+            "vital_id": vital_id,
+            "triage_status": state["triage_status"],
+            **state["result"],
+        }
+    ), 201
 
 
-@api_bp.route('/vitals/<int:vital_id>/triage', methods=['POST'])
-def continue_triage(vital_id):
+@api_bp.route("/vitals/<int:vital_id>/triage", methods=["POST"])
+def continue_triage_route(vital_id):
     data = request.get_json() or {}
-    patient_id = data.get('patient_id')
-    answer = str(data.get('answer', '')).strip()
+    patient_id = data.get("patient_id")
+    answer = str(data.get("answer", "")).strip()
 
     if not patient_id or not answer:
         return jsonify({"error": "patient_id and answer are required"}), 400
 
     conn = get_db_connection()
     vital = conn.execute(
-        'SELECT * FROM vitals WHERE id = ? AND patient_id = ?',
-        (vital_id, patient_id)
+        "SELECT * FROM vitals WHERE id = ? AND patient_id = ?",
+        (vital_id, patient_id),
     ).fetchone()
-
     if vital is None:
         conn.close()
         return jsonify({"error": "Vitals record not found"}), 404
 
-    current_triage = _load_json(vital["ai_recommendation"], {})
-    conversation_history = _load_json(vital["conversation_history"], [])
-
+    current_triage = load_json(vital["ai_recommendation"], {})
     if current_triage.get("type") != "question":
         conn.close()
         return jsonify({"error": "Triage has already reached a final decision"}), 409
 
-    conversation_history.append(
-        {
-            "question": current_triage.get("question", ""),
-            "answer": answer,
-        }
-    )
-
-    result = classify_vitals(
-        vital["spo2"],
-        vital["temperature"],
-        vital["heart_rate"],
-        conversation_history,
-    )
-
-    next_triage = result["triage_response"]
-    classification = next_triage.get("risk_label", result["risk_level"])
-
+    state = continue_triage(vital, answer)
     conn.execute(
-        'UPDATE vitals SET classification = ?, ai_recommendation = ?, conversation_history = ? WHERE id = ?',
+        """
+        UPDATE vitals
+        SET classification = ?, triage_status = ?, ai_recommendation = ?, conversation_history = ?,
+            model_assessment = ?, disagreement_logged = ?, final_source = ?
+        WHERE id = ?
+        """,
         (
-            classification,
-            json.dumps(next_triage),
-            json.dumps(conversation_history),
+            state["classification"],
+            state["triage_status"],
+            state["ai_recommendation_json"],
+            state["conversation_history_json"],
+            state["model_assessment_json"],
+            state["disagreement_logged"],
+            state["final_source"],
             vital_id,
-        )
+        ),
     )
     conn.commit()
     conn.close()
@@ -101,7 +119,8 @@ def continue_triage(vital_id):
         {
             "status": "success",
             "vital_id": vital_id,
-            "conversation_history": conversation_history,
-            **result,
+            "triage_status": state["triage_status"],
+            "conversation_history": state["conversation_history"],
+            **state["result"],
         }
     )

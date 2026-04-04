@@ -10,11 +10,12 @@
         --triage-question: #ebf3ff;
         --triage-answer: #f8fafc;
         --triage-accent: #0f4c81;
-        --triage-accent-soft: #dcecff;
         --triage-success: #15803d;
         --triage-success-soft: #dcfce7;
         --triage-danger: #b42318;
         --triage-danger-soft: #fee4e2;
+        --triage-warning: #b54708;
+        --triage-warning-soft: #ffead5;
     }
 
     body {
@@ -27,7 +28,7 @@
     .triage-shell {
         display: grid;
         gap: 1.5rem;
-        grid-template-columns: minmax(0, 1.7fr) minmax(320px, 0.9fr);
+        grid-template-columns: minmax(0, 1.7fr) minmax(320px, 0.95fr);
     }
 
     .triage-panel {
@@ -57,32 +58,27 @@
         letter-spacing: 0.04em;
     }
 
-    .triage-chip.low {
-        background: var(--triage-success-soft);
-        color: var(--triage-success);
-    }
+    .triage-chip.low { background: var(--triage-success-soft); color: var(--triage-success); }
+    .triage-chip.high { background: var(--triage-danger-soft); color: var(--triage-danger); }
+    .triage-chip.progress { background: var(--triage-warning-soft); color: var(--triage-warning); }
 
-    .triage-chip.high {
-        background: var(--triage-danger-soft);
-        color: var(--triage-danger);
-    }
-
-    .triage-summary {
+    .triage-summary,
+    .triage-grid {
         display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(4, minmax(0, 1fr));
         gap: 0.9rem;
         padding: 1.2rem 1.5rem 1.4rem;
         border-bottom: 1px solid var(--triage-line);
     }
 
-    .triage-stat {
+    .triage-card {
         background: var(--triage-surface);
         border: 1px solid var(--triage-line);
         border-radius: 18px;
         padding: 1rem;
     }
 
-    .triage-stat-label {
+    .triage-label {
         color: var(--triage-muted);
         font-size: 0.8rem;
         font-weight: 700;
@@ -90,8 +86,8 @@
         text-transform: uppercase;
     }
 
-    .triage-stat-value {
-        font-size: 1.7rem;
+    .triage-value {
+        font-size: 1.25rem;
         font-weight: 800;
         margin-top: 0.35rem;
     }
@@ -104,13 +100,13 @@
         display: flex;
         flex-direction: column;
         gap: 0.85rem;
-        max-height: 480px;
+        max-height: 520px;
         overflow-y: auto;
         padding-right: 0.25rem;
     }
 
     .triage-message {
-        max-width: 88%;
+        max-width: 90%;
         border-radius: 20px;
         padding: 1rem 1.05rem;
         line-height: 1.5;
@@ -130,8 +126,8 @@
 
     .triage-message.final {
         max-width: 100%;
-        background: linear-gradient(180deg, #fff7ed 0%, #fff 100%);
-        border: 1px solid #fed7aa;
+        border: 1px solid #ffd29d;
+        background: linear-gradient(180deg, #fff7ed 0%, #ffffff 100%);
     }
 
     .triage-role {
@@ -163,13 +159,6 @@
         border: 1px solid var(--triage-line);
         border-radius: 18px;
         padding: 1rem;
-        transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
-    }
-
-    .triage-session-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
-        border-color: #bfd2e5;
     }
 
     .triage-session-card.active {
@@ -178,7 +167,8 @@
         box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
     }
 
-    .triage-session-meta {
+    .triage-session-meta,
+    .triage-note {
         color: var(--triage-muted);
         font-size: 0.85rem;
     }
@@ -190,17 +180,9 @@
     }
 
     @media (max-width: 991px) {
-        .triage-shell {
-            grid-template-columns: 1fr;
-        }
-
-        .triage-summary {
-            grid-template-columns: 1fr;
-        }
-
-        .triage-message {
-            max-width: 100%;
-        }
+        .triage-shell { grid-template-columns: 1fr; }
+        .triage-summary, .triage-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .triage-message { max-width: 100%; }
     }
 </style>
 
@@ -215,7 +197,8 @@
 <div class="triage-shell">
     <section class="triage-panel" id="active-triage">
         {% if latest_vital %}
-            {% set classification = latest_vital.classification|lower %}
+            {% set status = latest_vital.triage_status or 'questioning' %}
+            {% set final_label = latest_triage.risk_label if latest_triage.type == 'final' else '' %}
             <div class="triage-header">
                 <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
                     <div>
@@ -223,24 +206,51 @@
                         <h3 class="mb-1">Session #{{ latest_vital.id }}</h3>
                         <div class="opacity-75">Started {{ latest_vital.timestamp }}</div>
                     </div>
-                    <span class="triage-chip {{ 'low' if classification == 'low risk' else 'high' }}">
-                        {{ latest_vital.classification }}
-                    </span>
+                    {% if status == 'completed' %}
+                        <span class="triage-chip {{ 'low' if final_label == 'low risk' else 'high' }}">
+                            {{ final_label }}
+                        </span>
+                    {% else %}
+                        <span class="triage-chip progress">Questioning</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="triage-grid">
+                <div class="triage-card">
+                    <div class="triage-label">Age</div>
+                    <div class="triage-value">{{ latest_vital.age }}</div>
+                </div>
+                <div class="triage-card">
+                    <div class="triage-label">Gender</div>
+                    <div class="triage-value">{{ latest_vital.gender }}</div>
+                </div>
+                <div class="triage-card">
+                    <div class="triage-label">Weight</div>
+                    <div class="triage-value">{{ latest_vital.weight }} kg</div>
+                </div>
+                <div class="triage-card">
+                    <div class="triage-label">Height</div>
+                    <div class="triage-value">{{ latest_vital.height }} m</div>
                 </div>
             </div>
 
             <div class="triage-summary">
-                <div class="triage-stat">
-                    <div class="triage-stat-label">SpO2</div>
-                    <div class="triage-stat-value">{{ latest_vital.spo2 }}%</div>
+                <div class="triage-card">
+                    <div class="triage-label">SpO2</div>
+                    <div class="triage-value">{{ latest_vital.spo2 }}%</div>
                 </div>
-                <div class="triage-stat">
-                    <div class="triage-stat-label">Temperature</div>
-                    <div class="triage-stat-value">{{ latest_vital.temperature }}&deg;C</div>
+                <div class="triage-card">
+                    <div class="triage-label">Temperature</div>
+                    <div class="triage-value">{{ latest_vital.temperature }}&deg;C</div>
                 </div>
-                <div class="triage-stat">
-                    <div class="triage-stat-label">Heart Rate</div>
-                    <div class="triage-stat-value">{{ latest_vital.heart_rate }} BPM</div>
+                <div class="triage-card">
+                    <div class="triage-label">Heart Rate</div>
+                    <div class="triage-value">{{ latest_vital.heart_rate }} BPM</div>
+                </div>
+                <div class="triage-card">
+                    <div class="triage-label">Model Background</div>
+                    <div class="triage-value">{{ model_assessment.risk_label or 'pending' }}</div>
                 </div>
             </div>
 
@@ -248,38 +258,36 @@
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <div>
                         <h5 class="mb-1">Triage Conversation</h5>
-                        <div class="text-muted small">The assistant asks one question at a time and stops when the case is clear.</div>
+                        <div class="triage-note">Gemini asks one follow-up question at a time. The final answer stays hidden until questioning is complete.</div>
                     </div>
-                    <div class="text-muted small">{{ latest_history|length }} answered</div>
+                    <div class="triage-note">{{ latest_history|length }} answered</div>
                 </div>
 
                 <div class="triage-thread">
-                    {% if latest_history %}
-                        {% for item in latest_history %}
-                            <div class="triage-message ai">
-                                <div class="triage-role">Assistant</div>
-                                {{ item.question }}
-                            </div>
-                            <div class="triage-message user">
-                                <div class="triage-role">Patient Reply</div>
-                                {{ item.answer }}
-                            </div>
-                        {% endfor %}
-                    {% endif %}
+                    {% for item in latest_history %}
+                        <div class="triage-message ai">
+                            <div class="triage-role">Assistant</div>
+                            {{ item.question }}
+                        </div>
+                        <div class="triage-message user">
+                            <div class="triage-role">Patient Reply</div>
+                            {{ item.answer }}
+                        </div>
+                    {% endfor %}
 
                     {% if latest_triage.type == 'question' %}
                         <div class="triage-message ai">
-                            <div class="triage-role">Assistant</div>
+                            <div class="triage-role">Current Question</div>
                             {{ latest_triage.question }}
                         </div>
                     {% elif latest_triage.type == 'final' %}
                         <div class="triage-message final">
-                            <div class="triage-role">Final Decision</div>
-                            <p class="mb-2"><strong>Risk label:</strong> {{ latest_triage.risk_label }}</p>
-                            <p class="mb-2"><strong>UI color:</strong> {{ latest_triage.ui_color }}</p>
-                            <p class="mb-2"><strong>Confidence:</strong> {{ (latest_triage.confidence * 100)|round(0)|int }}%</p>
-                            <p class="mb-2"><strong>Reasoning:</strong> {{ latest_triage.reasoning }}</p>
-                            <p class="mb-0"><strong>Advice:</strong> {{ latest_triage.advice }}</p>
+                            <div class="triage-role">Final Result</div>
+                            <p class="mb-2"><strong>Risk Result:</strong> {{ latest_triage.risk_label }}</p>
+                            <p class="mb-2"><strong>Urgency Level:</strong> {{ 'Crucial' if latest_triage.is_crucial else 'Not crucial' }}</p>
+                            <p class="mb-2"><strong>Explanation:</strong> {{ latest_triage.reasoning }}</p>
+                            <p class="mb-2"><strong>Advice:</strong> {{ latest_triage.advice }}</p>
+                            <p class="mb-0"><strong>Recommended Next Action:</strong> {{ latest_triage.recommended_next_action }}</p>
                         </div>
                     {% else %}
                         <div class="triage-empty">No triage response is available for this session.</div>
@@ -289,7 +297,6 @@
                 {% if latest_triage.type == 'question' %}
                     <div class="triage-composer">
                         <div class="small text-muted mb-3">Expected input: {{ latest_triage.input_type }}</div>
-
                         {% if latest_triage.input_type == 'yes_no' %}
                             <form action="{{ url_for('routes.submit_triage_answer', vital_id=latest_vital.id) }}" method="POST" class="d-flex gap-2 flex-wrap">
                                 <button type="submit" name="answer" value="yes" class="btn btn-danger px-4">Yes</button>
@@ -317,35 +324,54 @@
         {% else %}
             <div class="triage-empty">
                 <h4 class="mb-2">No Triage Session Yet</h4>
-                <p class="mb-0">Submit a new set of vitals to start the first triage conversation.</p>
+                <p class="mb-0">Submit patient information to begin the questioning flow.</p>
             </div>
         {% endif %}
     </section>
 
     <aside class="d-flex flex-column gap-4">
         <section class="triage-panel p-4">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <div>
-                    <h5 class="mb-1">Start New Session</h5>
-                    <div class="text-muted small">Create a fresh triage case from current vitals.</div>
-                </div>
+            <div class="mb-3">
+                <h5 class="mb-1">Start New Session</h5>
+                <div class="triage-note">Collect all structured patient fields first. Gemini will then ask follow-up questions one at a time.</div>
             </div>
 
-            <form action="{{ url_for('routes.add_vitals') }}" method="POST" class="row g-3">
-                <div class="col-12">
+            <form action="{{ url_for('routes.start_triage') }}" method="POST" class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label fw-bold text-muted">Age</label>
+                    <input type="number" class="form-control" name="age" min="0" required>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold text-muted">Gender</label>
+                    <select class="form-select" name="gender" required>
+                        <option value="">Select...</option>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold text-muted">Weight (kg)</label>
+                    <input type="number" step="0.1" class="form-control" name="weight" required>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold text-muted">Height (m)</label>
+                    <input type="number" step="0.01" class="form-control" name="height" required>
+                </div>
+                <div class="col-md-4">
                     <label class="form-label fw-bold text-muted">SpO2 (%)</label>
-                    <input type="number" step="0.1" class="form-control" name="spo2" placeholder="98" required>
+                    <input type="number" step="0.1" class="form-control" name="spo2" required>
                 </div>
-                <div class="col-12">
+                <div class="col-md-4">
                     <label class="form-label fw-bold text-muted">Temperature (&deg;C)</label>
-                    <input type="number" step="0.1" class="form-control" name="temperature" placeholder="37.5" required>
+                    <input type="number" step="0.1" class="form-control" name="temperature" required>
                 </div>
-                <div class="col-12">
+                <div class="col-md-4">
                     <label class="form-label fw-bold text-muted">Heart Rate (BPM)</label>
-                    <input type="number" class="form-control" name="heart_rate" placeholder="75" required>
+                    <input type="number" class="form-control" name="heart_rate" required>
                 </div>
                 <div class="col-12">
-                    <button type="submit" class="btn btn-primary w-100 fw-bold">Start Triage</button>
+                    <button type="submit" class="btn btn-primary w-100 fw-bold">Begin Triage Questions</button>
                 </div>
             </form>
         </section>
@@ -354,7 +380,7 @@
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <div>
                     <h5 class="mb-1">Sessions</h5>
-                    <div class="text-muted small">Switch between active and previous triage cases.</div>
+                    <div class="triage-note">Questioning sessions stay in progress until Gemini returns a final answer.</div>
                 </div>
                 <span class="badge text-bg-light">{{ vitals|length }}</span>
             </div>
@@ -362,32 +388,81 @@
             {% if vitals %}
                 <div class="triage-session-list">
                     {% for vital in vitals %}
-                        {% set item_classification = vital.classification|lower %}
-                        <a
-                            href="{{ url_for('routes.dashboard', triage_id=vital.id) }}"
-                            class="triage-session-card {{ 'active' if selected_vital_id == vital.id else '' }}"
-                        >
+                        {% set session_status = vital.triage_status or 'questioning' %}
+                        {% set item_classification = vital.classification|lower if vital.classification else '' %}
+                        <a href="{{ url_for('routes.dashboard', triage_id=vital.id) }}" class="triage-session-card {{ 'active' if selected_vital_id == vital.id else '' }}">
                             <div class="d-flex justify-content-between align-items-start gap-3">
                                 <div>
                                     <div class="fw-bold">Session #{{ vital.id }}</div>
                                     <div class="triage-session-meta">{{ vital.timestamp }}</div>
                                 </div>
-                                <span class="triage-chip {{ 'low' if item_classification == 'low risk' else 'high' }}">
-                                    {{ vital.classification }}
-                                </span>
+                                {% if session_status == 'completed' %}
+                                    <span class="triage-chip {{ 'low' if item_classification == 'low risk' else 'high' }}">{{ vital.classification }}</span>
+                                {% else %}
+                                    <span class="triage-chip progress">Questioning</span>
+                                {% endif %}
                             </div>
                             <div class="triage-session-meta mt-3">
-                                SpO2 {{ vital.spo2 }}% | Temp {{ vital.temperature }}&deg;C | HR {{ vital.heart_rate }}
+                                Age {{ vital.age }} | {{ vital.gender }} | SpO2 {{ vital.spo2 }}% | Temp {{ vital.temperature }}&deg;C | HR {{ vital.heart_rate }}
                             </div>
                         </a>
                     {% endfor %}
                 </div>
             {% else %}
-                <div class="triage-empty px-0 py-3 text-start">
-                    No sessions recorded for this patient yet.
-                </div>
+                <div class="triage-empty px-0 py-3 text-start">No sessions recorded for this patient yet.</div>
             {% endif %}
         </section>
     </aside>
 </div>
+
+<script>
+    (function () {
+        const activeTriage = document.getElementById("active-triage");
+        if (!activeTriage) {
+            return;
+        }
+
+        const shouldFocusTriage = function () {
+            return (
+                window.location.hash === "#active-triage" ||
+                new URLSearchParams(window.location.search).has("triage_id")
+            );
+        };
+
+        const focusAnswerControl = function () {
+            const answerInput = activeTriage.querySelector("input[name='answer']");
+            if (answerInput && typeof answerInput.focus === "function") {
+                answerInput.focus({ preventScroll: true });
+                return;
+            }
+
+            const answerButton = activeTriage.querySelector("button[name='answer']");
+            if (answerButton && typeof answerButton.focus === "function") {
+                answerButton.focus({ preventScroll: true });
+            }
+        };
+
+        const jumpToActiveTriage = function () {
+            if (!shouldFocusTriage()) {
+                return;
+            }
+
+            activeTriage.scrollIntoView({ block: "start", behavior: "auto" });
+            focusAnswerControl();
+        };
+
+        if ("scrollRestoration" in history) {
+            history.scrollRestoration = "manual";
+        }
+
+        window.addEventListener("load", function () {
+            jumpToActiveTriage();
+            requestAnimationFrame(jumpToActiveTriage);
+            window.setTimeout(jumpToActiveTriage, 120);
+        });
+
+        window.addEventListener("pageshow", jumpToActiveTriage);
+        window.addEventListener("hashchange", jumpToActiveTriage);
+    })();
+</script>
 {% endblock %}

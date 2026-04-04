@@ -1,0 +1,393 @@
+{
+  "dataset_audit": {
+    "shape": [
+      200020,
+      17
+    ],
+    "missing_values": {
+      "Patient ID": 0,
+      "Heart Rate": 0,
+      "Respiratory Rate": 0,
+      "Timestamp": 0,
+      "Body Temperature": 0,
+      "Oxygen Saturation": 0,
+      "Systolic Blood Pressure": 0,
+      "Diastolic Blood Pressure": 0,
+      "Age": 0,
+      "Gender": 0,
+      "Weight (kg)": 0,
+      "Height (m)": 0,
+      "Derived_HRV": 0,
+      "Derived_Pulse_Pressure": 0,
+      "Derived_BMI": 0,
+      "Derived_MAP": 0,
+      "Risk Category": 0
+    },
+    "class_balance": {
+      "high risk": 105115,
+      "low risk": 94905
+    },
+    "full_row_duplicates": 0,
+    "deployable_feature_duplicates": 0,
+    "deployable_feature_label_contradictions": 0,
+    "unique_patient_ids": 200020,
+    "unique_timestamps": 200020,
+    "suspicious_high_risk_with_normal_deployable_vitals": 63076,
+    "suspicious_low_risk_with_extreme_deployable_vitals": 0,
+    "deployable_input_summary": {
+      "Age": {
+        "min": 18.0,
+        "p01": 18.0,
+        "median": 53.0,
+        "p99": 89.0,
+        "max": 89.0
+      },
+      "Weight (kg)": {
+        "min": 50.0001564760608,
+        "p01": 50.48612834564527,
+        "median": 74.9771691259028,
+        "p99": 99.51044124709536,
+        "max": 99.99976465874605
+      },
+      "Height (m)": {
+        "min": 1.5000006649512407,
+        "p01": 1.5049781152240482,
+        "median": 1.7504780215543307,
+        "p99": 1.9950702586200362,
+        "max": 1.9999971351632664
+      },
+      "Oxygen Saturation": {
+        "min": 95.0000066683982,
+        "p01": 95.05079297330894,
+        "median": 97.50962877734722,
+        "p99": 99.95141314860716,
+        "max": 99.99996250272244
+      },
+      "Body Temperature": {
+        "min": 36.00000442562442,
+        "p01": 36.01476481717113,
+        "median": 36.747741058668225,
+        "p99": 37.48527507788306,
+        "max": 37.49999177587785
+      },
+      "Heart Rate": {
+        "min": 60.0,
+        "p01": 60.0,
+        "median": 80.0,
+        "p99": 99.0,
+        "max": 99.0
+      }
+    },
+    "gender_counts": {
+      "Female": 100117,
+      "Male": 99903
+    }
+  },
+  "model_results": [
+    {
+      "name": "logistic_regression_balanced",
+      "validation_threshold_metrics": {
+        "threshold": 0.32499999999999996,
+        "accuracy": 1.0,
+        "precision_high_risk": 1.0,
+        "recall_high_risk": 1.0,
+        "f1_high_risk": 1.0
+      },
+      "test_default_threshold": {
+        "threshold": 0.5,
+        "accuracy": 1.0,
+        "precision_high_risk": 1.0,
+        "recall_high_risk": 1.0,
+        "f1_high_risk": 1.0,
+        "confusion_matrix": [
+          [
+            18981,
+            0
+          ],
+          [
+            0,
+            21023
+          ]
+        ],
+        "classification_report": {
+          "low risk": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1-score": 1.0,
+            "support": 18981.0
+          },
+          "high risk": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1-score": 1.0,
+            "support": 21023.0
+          },
+          "accuracy": 1.0,
+          "macro avg": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1-score": 1.0,
+            "support": 40004.0
+          },
+          "weighted avg": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1-score": 1.0,
+            "support": 40004.0
+          }
+        }
+      },
+      "test_tuned_threshold": {
+        "threshold": 0.325,
+        "accuracy": 1.0,
+        "precision_high_risk": 1.0,
+        "recall_high_risk": 1.0,
+        "f1_high_risk": 1.0,
+        "confusion_matrix": [
+          [
+            18981,
+            0
+          ],
+          [
+            0,
+            21023
+          ]
+        ],
+        "classification_report": {
+          "low risk": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1-score": 1.0,
+            "support": 18981.0
+          },
+          "high risk": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1-score": 1.0,
+            "support": 21023.0
+          },
+          "accuracy": 1.0,
+          "macro avg": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1-score": 1.0,
+            "support": 40004.0
+          },
+          "weighted avg": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1-score": 1.0,
+            "support": 40004.0
+          }
+        }
+      },
+      "test_brier_score": 0.0023958629645810087,
+      "cross_validation": {
+        "accuracy": 1.0,
+        "precision_high_risk": 1.0,
+        "recall_high_risk": 1.0,
+        "f1_high_risk": 1.0
+      }
+    },
+    {
+      "name": "random_forest_balanced",
+      "validation_threshold_metrics": {
+        "threshold": 0.105,
+        "accuracy": 1.0,
+        "precision_high_risk": 1.0,
+        "recall_high_risk": 1.0,
+        "f1_high_risk": 1.0
+      },
+      "test_default_threshold": {
+        "threshold": 0.5,
+        "accuracy": 1.0,
+        "precision_high_risk": 1.0,
+        "recall_high_risk": 1.0,
+        "f1_high_risk": 1.0,
+        "confusion_matrix": [
+          [
+            18981,
+            0
+          ],
+          [
+            0,
+            21023
+          ]
+        ],
+        "classification_report": {
+          "low risk": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1-score": 1.0,
+            "support": 18981.0
+          },
+          "high risk": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1-score": 1.0,
+            "support": 21023.0
+          },
+          "accuracy": 1.0,
+          "macro avg": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1-score": 1.0,
+            "support": 40004.0
+          },
+          "weighted avg": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1-score": 1.0,
+            "support": 40004.0
+          }
+        }
+      },
+      "test_tuned_threshold": {
+        "threshold": 0.105,
+        "accuracy": 1.0,
+        "precision_high_risk": 1.0,
+        "recall_high_risk": 1.0,
+        "f1_high_risk": 1.0,
+        "confusion_matrix": [
+          [
+            18981,
+            0
+          ],
+          [
+            0,
+            21023
+          ]
+        ],
+        "classification_report": {
+          "low risk": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1-score": 1.0,
+            "support": 18981.0
+          },
+          "high risk": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1-score": 1.0,
+            "support": 21023.0
+          },
+          "accuracy": 1.0,
+          "macro avg": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1-score": 1.0,
+            "support": 40004.0
+          },
+          "weighted avg": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1-score": 1.0,
+            "support": 40004.0
+          }
+        }
+      },
+      "test_brier_score": 4.676758428318424e-05,
+      "cross_validation": null
+    },
+    {
+      "name": "gradient_boosting",
+      "validation_threshold_metrics": {
+        "threshold": 0.05,
+        "accuracy": 1.0,
+        "precision_high_risk": 1.0,
+        "recall_high_risk": 1.0,
+        "f1_high_risk": 1.0
+      },
+      "test_default_threshold": {
+        "threshold": 0.5,
+        "accuracy": 1.0,
+        "precision_high_risk": 1.0,
+        "recall_high_risk": 1.0,
+        "f1_high_risk": 1.0,
+        "confusion_matrix": [
+          [
+            18981,
+            0
+          ],
+          [
+            0,
+            21023
+          ]
+        ],
+        "classification_report": {
+          "low risk": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1-score": 1.0,
+            "support": 18981.0
+          },
+          "high risk": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1-score": 1.0,
+            "support": 21023.0
+          },
+          "accuracy": 1.0,
+          "macro avg": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1-score": 1.0,
+            "support": 40004.0
+          },
+          "weighted avg": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1-score": 1.0,
+            "support": 40004.0
+          }
+        }
+      },
+      "test_tuned_threshold": {
+        "threshold": 0.05,
+        "accuracy": 1.0,
+        "precision_high_risk": 1.0,
+        "recall_high_risk": 1.0,
+        "f1_high_risk": 1.0,
+        "confusion_matrix": [
+          [
+            18981,
+            0
+          ],
+          [
+            0,
+            21023
+          ]
+        ],
+        "classification_report": {
+          "low risk": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1-score": 1.0,
+            "support": 18981.0
+          },
+          "high risk": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1-score": 1.0,
+            "support": 21023.0
+          },
+          "accuracy": 1.0,
+          "macro avg": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1-score": 1.0,
+            "support": 40004.0
+          },
+          "weighted avg": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1-score": 1.0,
+            "support": 40004.0
+          }
+        }
+      },
+      "test_brier_score": 1.478834689748759e-06,
+      "cross_validation": null
+    }
+  ]
+}

@@ -3,9 +3,11 @@ import os
 from pathlib import Path
 
 import joblib
+import numpy as np
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
+
 from model_features import build_feature_frame
 
 
@@ -13,6 +15,7 @@ load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent
 MODEL_PATH = BASE_DIR / "triage_model.pkl"
+MODEL_META_PATH = BASE_DIR / "triage_model_meta.json"
 
 if not MODEL_PATH.exists():
     raise FileNotFoundError(
@@ -20,6 +23,9 @@ if not MODEL_PATH.exists():
     )
 
 TRIAGE_MODEL = joblib.load(MODEL_PATH)
+MODEL_META = {}
+if MODEL_META_PATH.exists():
+    MODEL_META = json.loads(MODEL_META_PATH.read_text(encoding="utf-8"))
 
 api_key = os.getenv("GEMINI_API_KEY")
 if not api_key:
@@ -44,14 +50,71 @@ def _normalize_risk_label(label):
     raise ValueError(f"Unsupported risk label: {label}")
 
 
-def _build_features(spo2, temperature, heart_rate):
-    return build_feature_frame(
-        {
-            "Oxygen Saturation": float(spo2),
-            "Body Temperature": float(temperature),
-            "Heart Rate": int(heart_rate),
-        }
+def _normalize_patient_data(patient_data):
+    return {
+        "age": int(patient_data["age"]),
+        "gender": _clean_text(patient_data["gender"]).title(),
+        "weight": float(patient_data["weight"]),
+        "height": float(patient_data["height"]),
+        "spo2": float(patient_data["spo2"]),
+        "temperature": float(patient_data["temperature"]),
+        "heart_rate": int(patient_data["heart_rate"]),
+    }
+
+
+def _build_features(patient_data):
+    return build_feature_frame(patient_data)
+
+
+def _safety_override_triggered(patient_data):
+    override = MODEL_META.get("safety_override", {})
+    return (
+        float(patient_data["spo2"]) <= float(override.get("spo2_le", -np.inf))
+        or float(patient_data["temperature"]) >= float(override.get("temperature_ge", np.inf))
+        or int(patient_data["heart_rate"]) >= int(override.get("heart_rate_ge", np.iinfo(np.int32).max))
+        or int(patient_data["heart_rate"]) <= int(override.get("heart_rate_le", np.iinfo(np.int32).min))
     )
+
+
+def _predict_high_risk_probability(features):
+    if hasattr(TRIAGE_MODEL, "predict_proba"):
+        probabilities = TRIAGE_MODEL.predict_proba(features)[0]
+        classes = [str(label).strip().lower() for label in TRIAGE_MODEL.classes_]
+        if "high risk" not in classes:
+            raise ValueError(f"Model classes do not include high risk: {classes}")
+        return float(probabilities[classes.index("high risk")])
+
+    if hasattr(TRIAGE_MODEL, "decision_function"):
+        decision = float(TRIAGE_MODEL.decision_function(features)[0])
+        return 1.0 / (1.0 + np.exp(-decision))
+
+    prediction = str(TRIAGE_MODEL.predict(features)[0]).strip().lower()
+    return 1.0 if prediction == "high risk" else 0.0
+
+
+def _local_risk_assessment(patient_data):
+    normalized = _normalize_patient_data(patient_data)
+    features = _build_features(normalized)
+    threshold = float(MODEL_META.get("selected_threshold", 0.5))
+    high_risk_probability = _predict_high_risk_probability(features)
+
+    if _safety_override_triggered(normalized):
+        return {
+            "features": features,
+            "risk_label": "high risk",
+            "high_risk_probability": max(high_risk_probability, threshold),
+            "used_safety_override": True,
+            "is_crucial": True,
+        }
+
+    risk_label = "high risk" if high_risk_probability >= threshold else "low risk"
+    return {
+        "features": features,
+        "risk_label": risk_label,
+        "high_risk_probability": high_risk_probability,
+        "used_safety_override": False,
+        "is_crucial": risk_label == "high risk" and high_risk_probability >= max(0.75, threshold),
+    }
 
 
 def _asked_questions(conversation_history):
@@ -62,104 +125,77 @@ def _asked_questions(conversation_history):
     }
 
 
-def _build_prompt(spo2, temperature, heart_rate, risk_level, conversation_history, repeat_guard=False):
+def _build_prompt(patient_data, model_assessment, conversation_history, repeat_guard=False):
     history_json = json.dumps(conversation_history or [], ensure_ascii=True)
+    patient_json = json.dumps(patient_data, ensure_ascii=True)
     repeat_instruction = """
-- Do not repeat, restate, or rephrase a question that was already asked in the previous questions and answers.
-- If the next useful question would be repetitive, return a final decision instead.
+- Do not repeat, restate, or lightly rephrase a question that was already asked.
+- If the next useful question would repeat prior questioning, return a final decision instead.
 """.strip()
     return f"""
-You are an AI triage assistant integrated into a patient dashboard.
+You are an AI medical triage assistant.
 
 IMPORTANT:
-- The final classification must follow the trained dataset labels ONLY:
+- Final classification labels must be exactly one of:
   - "low risk"
   - "high risk"
-- Do not invent other labels such as "green", "red", "medium", or anything else.
-- Color is a UI property, not a class label:
+- UI colors map as:
   - low risk -> green
   - high risk -> red
+- You must ask follow-up questions one at a time.
+- Do not reveal a final answer until you have enough information.
+- If the case is clearly dangerous, you may stop immediately and return a final high-risk result.
 
-You already have a deterministic local model risk estimate. Use it as an anchor unless the symptoms clearly justify high risk.
+AVAILABLE PATIENT INFORMATION:
+{patient_json}
 
-Your job is to:
-1. Review the available vitals.
-2. Ask follow-up questions one at a time.
-3. Adapt each next question based on the current case, previous answers, and abnormal vitals.
-4. Stop asking questions when enough information has been collected to confidently match the case to the trained dataset pattern.
-5. Return either the next question or the final decision.
+BACKGROUND MODEL OUTPUT:
+- local model risk label: {model_assessment["risk_label"]}
+- local high-risk probability: {model_assessment["high_risk_probability"]:.3f}
+- local safety override used: {str(model_assessment["used_safety_override"]).lower()}
 
-AVAILABLE INPUTS:
-- SpO2: {float(spo2)}
-- Temperature: {float(temperature)}
-- Heart Rate: {int(heart_rate)}
-- Local model risk label: {risk_level}
-- Previous questions and answers: {history_json}
+PREVIOUS QUESTIONS AND ANSWERS:
+{history_json}
 
-QUESTION BEHAVIOR:
-- Ask only one question at a time.
-- Never ask multiple questions in one response.
-- Every question must be answerable in the UI with a text field, yes/no buttons, or multiple choice.
-- Prefer short, clinically relevant questions.
-- Ask follow-up questions only when they help distinguish between low risk and high risk according to the trained dataset.
-- Do not ask unnecessary questions.
-- If severe danger signs appear, stop and classify immediately as high risk.
+TASK:
+1. Review the structured patient information.
+2. Ask exactly one follow-up question if more information is needed.
+3. Use the running Q/A history to avoid repetition.
+4. Stop once you have enough information and return the final triage decision.
+5. If severe symptoms or a dangerous pattern are already present, finalize immediately as high risk.
 
-QUESTION STRATEGY:
-- Start with the most important symptom-discriminating question based on the vitals.
-- Examples of useful areas:
-  - shortness of breath
-  - chest pain
-  - unusual fatigue
-  - dizziness
-  - cough or fever symptoms
-  - duration of symptoms
-  - known heart/lung illness
-  - recent infection
-- If SpO2 is low, prioritize breathing-related questions.
-- If temperature is elevated, prioritize infection-related questions.
-- If heart rate is abnormal, prioritize circulation, dehydration, pain, or anxiety-related questions.
-- If the patient reports severe symptoms, classify high risk without continuing.
+QUESTION RULES:
+- Ask exactly one question at a time.
+- The question must be short and clinically useful.
+- Supported input types are: yes_no, text, multiple_choice.
+- Prefer yes/no or multiple-choice when possible.
+- Ask only questions that can change the final triage decision.
+- Consider symptom severity, duration, breathing difficulty, chest pain, confusion, dizziness, known conditions, and infection symptoms.
 {repeat_instruction if repeat_guard or conversation_history else ""}
 
-STOP RULE:
-Stop asking questions when one of these is true:
-1. You have enough information to confidently assign "low risk" or "high risk" based on the trained dataset pattern.
-2. A high-risk symptom pattern is already clear.
-3. Additional questions would not meaningfully change the classification.
-
 OUTPUT RULES:
-You must return ONLY valid JSON.
+Return ONLY valid JSON.
 
-If more information is needed, return:
+If more questions are needed, return:
 {{
   "type": "question",
-  "question": "single next question here",
+  "question": "single next question",
   "input_type": "yes_no | text | multiple_choice",
-  "options": ["option1", "option2"],
+  "options": [],
   "should_continue_questions": true
 }}
 
-If enough information is available, return:
+If final output is ready, return:
 {{
   "type": "final",
   "risk_label": "low risk" or "high risk",
   "ui_color": "green" or "red",
-  "confidence": 0.0 to 1.0,
-  "reasoning": "brief explanation based on symptoms, vitals, and answers",
-  "advice": "clear next-step advice for the patient",
+  "is_crucial": true or false,
+  "reasoning": "brief explanation",
+  "advice": "clear next-step advice",
+  "recommended_next_action": "one concise action statement",
   "should_continue_questions": false
 }}
-
-IMPORTANT CONSTRAINTS:
-- Final label must always be exactly one of:
-  - low risk
-  - high risk
-- Never output "green" or "red" as the risk class itself.
-- "ui_color" is only for frontend display.
-- Ask questions one by one.
-- Keep reasoning brief and clinically relevant.
-- When enough information is collected, stop and decide.
 """.strip()
 
 
@@ -170,57 +206,62 @@ def _is_repeated_question(question, conversation_history):
     return normalized_question in _asked_questions(conversation_history)
 
 
-def _fallback_question(spo2, temperature, heart_rate, conversation_history):
+def _fallback_question(patient_data, conversation_history):
     asked = _asked_questions(conversation_history)
     candidates = []
 
-    if float(spo2) < 95:
+    if float(patient_data["spo2"]) <= 94:
         candidates.extend(
             [
-                "Are you having shortness of breath right now?",
-                "Do you have chest pain when breathing or at rest?",
+                "Are you short of breath right now?",
+                "Do you have chest pain right now?",
             ]
         )
-    if float(temperature) >= 38.0:
+    if float(patient_data["temperature"]) >= 37.8:
         candidates.extend(
             [
-                "Have you had fever, chills, or a recent infection?",
-                "How long have the fever symptoms been present?",
+                "Have you had fever, chills, or recent infection symptoms?",
+                "How long have these symptoms been present?",
             ]
         )
-    if int(heart_rate) >= 100 or int(heart_rate) <= 50:
+    if int(patient_data["heart_rate"]) >= 100 or int(patient_data["heart_rate"]) <= 55:
         candidates.extend(
             [
-                "Are you feeling dizzy, faint, or unusually weak?",
+                "Do you feel faint, confused, or unusually weak?",
                 "Have you had vomiting, diarrhea, or poor fluid intake today?",
             ]
         )
+    if int(patient_data["age"]) >= 65:
+        candidates.append("Do you have any chronic heart or lung disease?")
 
     candidates.extend(
         [
-            "Do you have a known heart or lung condition?",
-            "Did these symptoms start suddenly today or build up over time?",
-            "Are you having shortness of breath, chest pain, or severe dizziness right now?",
+            "Are your symptoms getting worse quickly?",
+            "Do you have severe shortness of breath, chest pain, or confusion right now?",
         ]
     )
 
     for candidate in candidates:
-        if _normalize_text(candidate) not in asked:
-            return {
-                "type": "question",
-                "question": candidate,
-                "input_type": "yes_no" if candidate.endswith("right now?") or candidate.startswith("Do you") or candidate.startswith("Are you") or candidate.startswith("Have you") else "text",
-                "options": ["yes", "no"] if candidate.endswith("right now?") or candidate.startswith("Do you") or candidate.startswith("Are you") or candidate.startswith("Have you") else [],
-                "should_continue_questions": True,
-            }
+        if _normalize_text(candidate) in asked:
+            continue
+        is_yes_no = candidate.endswith("right now?") or candidate.startswith("Do you") or candidate.startswith("Are you") or candidate.startswith("Have you")
+        return {
+            "type": "question",
+            "question": candidate,
+            "input_type": "yes_no" if is_yes_no else "text",
+            "options": ["yes", "no"] if is_yes_no else [],
+            "should_continue_questions": True,
+        }
 
+    risk_label = "high risk" if _safety_override_triggered(patient_data) else "low risk"
     return {
         "type": "final",
-        "risk_label": "high risk" if float(spo2) < 95 or float(temperature) >= 38.0 or int(heart_rate) >= 100 else "low risk",
-        "ui_color": "red" if float(spo2) < 95 or float(temperature) >= 38.0 or int(heart_rate) >= 100 else "green",
-        "confidence": 0.65,
-        "reasoning": "The conversation stopped progressing because the next question would repeat prior triage questions.",
-        "advice": "Seek medical review if symptoms are worsening. If you feel stable, continue monitoring and follow standard care guidance.",
+        "risk_label": risk_label,
+        "ui_color": "red" if risk_label == "high risk" else "green",
+        "is_crucial": risk_label == "high risk",
+        "reasoning": "The conversation stopped progressing because the next question would repeat prior questions.",
+        "advice": "Seek medical care promptly if symptoms are worsening or severe. If you feel stable, continue monitoring closely.",
+        "recommended_next_action": "Seek urgent care now." if risk_label == "high risk" else "Continue monitoring and arrange routine medical follow-up if symptoms persist.",
         "should_continue_questions": False,
     }
 
@@ -243,7 +284,6 @@ def _validate_question_response(payload):
         options = [_clean_text(option) for option in options]
     else:
         options = []
-
     return {
         "type": "question",
         "question": question,
@@ -261,20 +301,15 @@ def _validate_final_response(payload):
     expected_color = "green" if risk_label == "low risk" else "red"
     if ui_color != expected_color:
         ui_color = expected_color
-
-    confidence = payload.get("confidence", 0.0)
-    try:
-        confidence = max(0.0, min(1.0, float(confidence)))
-    except (TypeError, ValueError):
-        confidence = 0.0
-
+    is_crucial = bool(payload.get("is_crucial", risk_label == "high risk"))
     return {
         "type": "final",
         "risk_label": risk_label,
         "ui_color": ui_color,
-        "confidence": confidence,
+        "is_crucial": is_crucial,
         "reasoning": _clean_text(payload.get("reasoning", "")),
         "advice": _clean_text(payload.get("advice", "")),
+        "recommended_next_action": _clean_text(payload.get("recommended_next_action", payload.get("advice", ""))),
         "should_continue_questions": False,
     }
 
@@ -289,19 +324,17 @@ def _validate_triage_response(payload):
     raise ValueError("Gemini response type must be 'question' or 'final'.")
 
 
-def classify_vitals(spo2, temperature, heart_rate, conversation_history=None):
-    features = _build_features(spo2, temperature, heart_rate)
-    local_risk_level = _normalize_risk_label(TRIAGE_MODEL.predict(features)[0])
+def run_triage(patient_data, conversation_history=None):
+    normalized = _normalize_patient_data(patient_data)
+    model_assessment = _local_risk_assessment(normalized)
     conversation_history = conversation_history or []
 
     try:
         triage_response = None
         for attempt in range(2):
             prompt = _build_prompt(
-                spo2=spo2,
-                temperature=temperature,
-                heart_rate=heart_rate,
-                risk_level=local_risk_level,
+                patient_data=normalized,
+                model_assessment=model_assessment,
                 conversation_history=conversation_history,
                 repeat_guard=attempt > 0,
             )
@@ -318,8 +351,8 @@ def classify_vitals(spo2, temperature, heart_rate, conversation_history=None):
             triage_response = getattr(response, "parsed", None)
             if triage_response is None:
                 triage_response = json.loads((response.text or "").strip())
-
             triage_response = _validate_triage_response(triage_response)
+
             if triage_response["type"] != "question" or not _is_repeated_question(
                 triage_response["question"], conversation_history
             ):
@@ -327,26 +360,39 @@ def classify_vitals(spo2, temperature, heart_rate, conversation_history=None):
             triage_response = None
 
         if triage_response is None:
-            triage_response = _fallback_question(
-                spo2=spo2,
-                temperature=temperature,
-                heart_rate=heart_rate,
-                conversation_history=conversation_history,
-            )
-
-        return {
-            "risk_level": local_risk_level,
-            "triage_response": triage_response,
-        }
+            triage_response = _fallback_question(normalized, conversation_history)
 
     except Exception as exc:
         print(f"Gemini triage generation error: {exc}")
-        return {
-            "risk_level": local_risk_level,
-            "triage_response": _fallback_question(
-                spo2=spo2,
-                temperature=temperature,
-                heart_rate=heart_rate,
-                conversation_history=conversation_history,
-            ),
-        }
+        triage_response = _fallback_question(normalized, conversation_history)
+
+    disagreement = False
+    if triage_response["type"] == "final":
+        disagreement = triage_response["risk_label"] != model_assessment["risk_label"]
+
+    return {
+        "patient_data": normalized,
+        "model_assessment": {
+            "risk_label": model_assessment["risk_label"],
+            "high_risk_probability": model_assessment["high_risk_probability"],
+            "used_safety_override": model_assessment["used_safety_override"],
+            "is_crucial": model_assessment["is_crucial"],
+        },
+        "triage_response": triage_response,
+        "disagreement": disagreement,
+    }
+
+
+def classify_vitals(spo2, temperature, heart_rate, conversation_history=None):
+    return run_triage(
+        {
+            "age": 35,
+            "gender": "Unknown",
+            "weight": 70,
+            "height": 1.7,
+            "spo2": spo2,
+            "temperature": temperature,
+            "heart_rate": heart_rate,
+        },
+        conversation_history=conversation_history,
+    )

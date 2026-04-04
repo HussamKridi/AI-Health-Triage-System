@@ -22,13 +22,29 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             patient_id TEXT NOT NULL,
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            age INTEGER,
+            gender TEXT,
+            weight REAL,
+            height REAL,
             spo2 REAL,
             temperature REAL,
             heart_rate INTEGER,
             classification TEXT,
-            ai_recommendation TEXT
+            triage_status TEXT DEFAULT 'questioning',
+            ai_recommendation TEXT,
+            model_assessment TEXT,
+            disagreement_logged INTEGER DEFAULT 0,
+            final_source TEXT DEFAULT 'pending'
         )
     ''')
     _ensure_column(conn, "vitals", "conversation_history", "TEXT DEFAULT '[]'")
+    _ensure_column(conn, "vitals", "age", "INTEGER")
+    _ensure_column(conn, "vitals", "gender", "TEXT")
+    _ensure_column(conn, "vitals", "weight", "REAL")
+    _ensure_column(conn, "vitals", "height", "REAL")
+    _ensure_column(conn, "vitals", "triage_status", "TEXT DEFAULT 'questioning'")
+    _ensure_column(conn, "vitals", "model_assessment", "TEXT")
+    _ensure_column(conn, "vitals", "disagreement_logged", "INTEGER DEFAULT 0")
+    _ensure_column(conn, "vitals", "final_source", "TEXT DEFAULT 'pending'")
     conn.commit()
     conn.close()
