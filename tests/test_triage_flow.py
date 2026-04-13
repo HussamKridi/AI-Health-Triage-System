@@ -234,6 +234,49 @@ class TriageFlowTests(unittest.TestCase):
         self.assertEqual(payload["triage_response"]["risk_label"], "high risk")
         self.assertTrue(payload["disagreement"])
 
+    def test_api_nearby_hospitals_returns_sorted_results_for_live_location(self):
+        mock_payload = {
+            "mode": "live_location",
+            "origin": {
+                "label": "Your current location",
+                "lat": 36.201,
+                "lng": 36.161,
+            },
+            "hospitals": [
+                {
+                    "name": "Kirikhan State Hospital",
+                    "address": "Hatay",
+                    "lat": 36.205,
+                    "lng": 36.169,
+                    "distance_meters": 640,
+                },
+                {
+                    "name": "Nearby Hospital",
+                    "address": "Hatay",
+                    "lat": 36.214,
+                    "lng": 36.171,
+                    "distance_meters": 1800,
+                },
+            ],
+            "fallback_used": False,
+        }
+
+        with patch.object(api, "lookup_nearby_hospitals", return_value=mock_payload):
+            response = self.client.get("/api/nearby-hospitals?lat=36.201&lng=36.161")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["mode"], "live_location")
+        self.assertFalse(payload["fallback_used"])
+        self.assertEqual(payload["origin"]["label"], "Your current location")
+        self.assertEqual(payload["hospitals"][0]["name"], "Kirikhan State Hospital")
+        self.assertEqual(payload["hospitals"][0]["distance_meters"], 640)
+
+    def test_api_nearby_hospitals_rejects_invalid_coordinates(self):
+        response = self.client.get("/api/nearby-hospitals?lat=abc&lng=36.1")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("error", response.get_json())
+
     def test_dashboard_shows_final_result_only_after_completion(self):
         with self.client.session_transaction() as session:
             session["patient_id"] = "PAT-FOCUS"
@@ -321,6 +364,65 @@ class TriageFlowTests(unittest.TestCase):
         page = response.get_data(as_text=True)
         self.assertIn("Final Result", page)
         self.assertIn("Go to urgent care now.", page)
+        self.assertIn("Emergency Assistance", page)
+        self.assertIn('href="tel:112"', page)
+        self.assertIn("Nearby Hospitals", page)
+        self.assertNotIn("Directions to Nearest Hospital", page)
+        self.assertIn("Your current location will be used to find nearby hospitals.", page)
+        self.assertIn('id="nearbyHospitalsBtn"', page)
+        self.assertIn('id="hospitalLocationStatus"', page)
+
+    def test_dashboard_shows_emergency_section_only_for_high_risk_final(self):
+        with self.client.session_transaction() as session:
+            session["patient_id"] = "PAT-RISK"
+
+        conn = models.get_db_connection()
+        conn.execute(
+            """
+            INSERT INTO vitals
+            (patient_id, age, gender, weight, height, spo2, temperature, heart_rate, classification,
+             triage_status, ai_recommendation, conversation_history, model_assessment, disagreement_logged, final_source)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "PAT-RISK",
+                34,
+                "Female",
+                61.0,
+                1.62,
+                98,
+                36.9,
+                78,
+                "low risk",
+                "completed",
+                json.dumps(
+                    {
+                        "type": "final",
+                        "risk_label": "low risk",
+                        "ui_color": "green",
+                        "is_crucial": False,
+                        "reasoning": "Stable vitals and no concerning symptoms.",
+                        "advice": "Continue monitoring symptoms.",
+                        "recommended_next_action": "Arrange routine follow-up if needed.",
+                        "should_continue_questions": False,
+                    }
+                ),
+                json.dumps([]),
+                json.dumps({"risk_label": "low risk"}),
+                0,
+                "gemini",
+            ),
+        )
+        conn.commit()
+        row = conn.execute("SELECT id FROM vitals WHERE patient_id = ?", ("PAT-RISK",)).fetchone()
+        conn.close()
+
+        response = self.client.get(f"/dashboard?triage_id={row['id']}")
+        page = response.get_data(as_text=True)
+        self.assertIn("Final Result", page)
+        self.assertNotIn("Emergency Assistance", page)
+        self.assertNotIn('href="tel:112"', page)
+        self.assertNotIn("Nearby Hospitals", page)
 
 
 if __name__ == "__main__":

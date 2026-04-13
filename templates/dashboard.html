@@ -179,6 +179,77 @@
         color: var(--triage-muted);
     }
 
+    .triage-emergency {
+        margin-top: 1rem;
+        border: 1px solid rgba(180, 35, 24, 0.22);
+        background: linear-gradient(180deg, #fff1f0 0%, #fff7f6 100%);
+        border-radius: 22px;
+        padding: 1.1rem 1.15rem;
+        box-shadow: 0 12px 30px rgba(180, 35, 24, 0.08);
+    }
+
+    .triage-emergency-title {
+        color: var(--triage-danger);
+        font-weight: 800;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+        font-size: 0.8rem;
+        margin-bottom: 0.35rem;
+    }
+
+    .triage-emergency-number {
+        font-size: 1.9rem;
+        font-weight: 900;
+        color: var(--triage-danger);
+        line-height: 1;
+        margin: 0.4rem 0 0.75rem;
+    }
+
+    .triage-emergency-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        margin-top: 1rem;
+    }
+
+    .triage-emergency-button {
+        flex: 1 1 220px;
+        min-height: 52px;
+        border-radius: 14px;
+        font-weight: 700;
+    }
+
+    .triage-emergency-status {
+        display: none;
+        margin-top: 0.85rem;
+        padding: 0.8rem 0.9rem;
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.72);
+        border: 1px solid rgba(180, 35, 24, 0.14);
+        color: var(--triage-danger);
+        font-size: 0.95rem;
+    }
+
+    .triage-emergency-status.visible {
+        display: block;
+    }
+
+    .triage-emergency-location {
+        margin-top: 0.85rem;
+        padding: 0.8rem 0.9rem;
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.78);
+        border: 1px solid rgba(180, 35, 24, 0.12);
+        color: var(--triage-ink);
+        font-size: 0.95rem;
+    }
+
+    .triage-emergency-location strong {
+        display: block;
+        color: var(--triage-danger);
+        margin-bottom: 0.2rem;
+    }
+
     @media (max-width: 991px) {
         .triage-shell { grid-template-columns: 1fr; }
         .triage-summary, .triage-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -289,6 +360,36 @@
                             <p class="mb-2"><strong>Advice:</strong> {{ latest_triage.advice }}</p>
                             <p class="mb-0"><strong>Recommended Next Action:</strong> {{ latest_triage.recommended_next_action }}</p>
                         </div>
+                        {% if latest_triage.risk_label == 'high risk' %}
+                            <section class="triage-emergency" id="emergency-assistance" aria-labelledby="emergency-assistance-title">
+                                <div class="triage-emergency-title" id="emergency-assistance-title">Emergency Assistance</div>
+                                <p class="mb-2"><strong>Your result indicates a high-risk condition.</strong> Please seek urgent medical attention.</p>
+                                <p class="mb-2">Your current location will be used to find nearby hospitals.</p>
+                                <div class="triage-emergency-number">112</div>
+                                <div class="triage-emergency-actions">
+                                    <a href="tel:112" class="btn btn-danger triage-emergency-button">Call Emergency (112)</a>
+                                    <button
+                                        type="button"
+                                        id="nearbyHospitalsBtn"
+                                        class="btn btn-outline-danger triage-emergency-button"
+                                        data-hospital-action="nearby"
+                                    >
+                                        Nearby Hospitals
+                                    </button>
+                                </div>
+                                <div class="triage-emergency-location" data-hospital-location hidden>
+                                    <strong data-hospital-location-label>Your current location</strong>
+                                    <span data-hospital-location-text>Location has not been requested yet.</span>
+                                </div>
+                                <div
+                                    class="triage-emergency-status"
+                                    id="hospitalLocationStatus"
+                                    data-hospital-status
+                                    role="status"
+                                    aria-live="polite"
+                                ></div>
+                            </section>
+                        {% endif %}
                     {% else %}
                         <div class="triage-empty">No triage response is available for this session.</div>
                     {% endif %}
@@ -464,5 +565,223 @@
         window.addEventListener("pageshow", jumpToActiveTriage);
         window.addEventListener("hashchange", jumpToActiveTriage);
     })();
+
+    document.addEventListener("DOMContentLoaded", function () {
+        console.log("Emergency assistance script initialized");
+
+        const emergencySection = document.getElementById("emergency-assistance");
+        const nearbyBtn = document.getElementById("nearbyHospitalsBtn");
+        const statusBox = document.getElementById("hospitalLocationStatus");
+        const locationBox = document.querySelector("[data-hospital-location]");
+        const locationLabel = document.querySelector("[data-hospital-location-label]");
+        const locationText = document.querySelector("[data-hospital-location-text]");
+
+        if (!emergencySection || !nearbyBtn || !statusBox || !locationBox || !locationLabel || !locationText) {
+            console.log("Emergency assistance elements not found; skipping setup");
+            return;
+        }
+
+        const EMERGENCY_FALLBACK_LOCATION = Object.freeze({
+            lat: 36.49940,
+            lng: 36.35760,
+            source: "fallback",
+            label: "Using temporary fallback area: K\u0131r\u0131khan, Hatay",
+        });
+        const GENERIC_NEARBY_MAP_URL = "https://www.google.com/maps/search/hospitals+near+me";
+        const KNOWN_STALE_BROWSER_LOCATION = Object.freeze({
+            lat: 40.22184,
+            lng: 28.84319,
+        });
+        const MAX_BROWSER_LOCATION_AGE_MS = 30000;
+        const STALE_LOCATION_EPSILON = 0.01;
+
+        const setStatus = function (message) {
+            statusBox.textContent = message || "";
+            statusBox.classList.toggle("visible", Boolean(message));
+        };
+
+        const setButtonsBusy = function (isBusy) {
+            nearbyBtn.disabled = Boolean(isBusy);
+        };
+
+        const showLocationState = function (label, text) {
+            locationBox.hidden = false;
+            locationLabel.textContent = label;
+            locationText.textContent = text;
+        };
+
+        const updateLocationDisplay = function (resolvedLocation) {
+            showLocationState(
+                resolvedLocation.source === "browser"
+                    ? "Using your current location"
+                    : "Using temporary fallback area: K\u0131r\u0131khan, Hatay",
+                "Lat " + resolvedLocation.lat.toFixed(5) + ", Lng " + resolvedLocation.lng.toFixed(5)
+            );
+        };
+
+        const buildNearbyMapUrl = function (latitude, longitude) {
+            return "https://www.google.com/maps/search/hospitals/@" + encodeURIComponent(latitude) + "," + encodeURIComponent(longitude) + ",15z";
+        };
+
+        const isFiniteCoordinate = function (value) {
+            return typeof value === "number" && Number.isFinite(value);
+        };
+
+        const matchesKnownStaleBrowserLocation = function (latitude, longitude) {
+            return Math.abs(latitude - KNOWN_STALE_BROWSER_LOCATION.lat) <= STALE_LOCATION_EPSILON
+                && Math.abs(longitude - KNOWN_STALE_BROWSER_LOCATION.lng) <= STALE_LOCATION_EPSILON;
+        };
+
+        const isUsableBrowserLocation = function (position) {
+            const latitude = position && position.coords ? position.coords.latitude : null;
+            const longitude = position && position.coords ? position.coords.longitude : null;
+            if (!isFiniteCoordinate(latitude) || !isFiniteCoordinate(longitude)) {
+                return false;
+            }
+
+            if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+                return false;
+            }
+
+            if (typeof position.timestamp === "number" && (Date.now() - position.timestamp) > MAX_BROWSER_LOCATION_AGE_MS) {
+                console.warn("Ignoring stale browser geolocation timestamp.", position.timestamp);
+                return false;
+            }
+
+            if (matchesKnownStaleBrowserLocation(latitude, longitude)) {
+                console.warn("Ignoring known stale browser geolocation.", latitude, longitude);
+                return false;
+            }
+
+            return true;
+        };
+
+        const logResolvedLocation = function (resolvedLocation) {
+            console.log("Resolved latitude:", resolvedLocation.lat);
+            console.log("Resolved longitude:", resolvedLocation.lng);
+            console.log("Resolved source:", resolvedLocation.source);
+        };
+
+        const buildFallbackLocation = function () {
+            return {
+                lat: EMERGENCY_FALLBACK_LOCATION.lat,
+                lng: EMERGENCY_FALLBACK_LOCATION.lng,
+                source: EMERGENCY_FALLBACK_LOCATION.source,
+                label: EMERGENCY_FALLBACK_LOCATION.label,
+            };
+        };
+
+        const resolveEmergencyLocation = function () {
+            showLocationState("Resolving location", "Requesting fresh browser geolocation...");
+
+            if (!navigator.geolocation) {
+                setStatus("Geolocation is not supported by this browser. Using temporary fallback area.");
+                const fallbackLocation = buildFallbackLocation();
+                updateLocationDisplay(fallbackLocation);
+                logResolvedLocation(fallbackLocation);
+                return Promise.resolve(fallbackLocation);
+            }
+
+            setStatus("Detecting your location...");
+
+            return new Promise(function (resolve) {
+                navigator.geolocation.getCurrentPosition(
+                    function (position) {
+                        const latitude = position && position.coords ? position.coords.latitude : null;
+                        const longitude = position && position.coords ? position.coords.longitude : null;
+
+                        if (isUsableBrowserLocation(position)) {
+                            const browserLocation = {
+                                lat: latitude,
+                                lng: longitude,
+                                source: "browser",
+                                label: "Using your current location",
+                            };
+                            updateLocationDisplay(browserLocation);
+                            logResolvedLocation(browserLocation);
+                            resolve(browserLocation);
+                            return;
+                        }
+
+                        if (matchesKnownStaleBrowserLocation(latitude, longitude)) {
+                            setStatus("Browser location returned stale Bursa coordinates. Using temporary fallback area.");
+                        } else {
+                            setStatus("Fresh browser location was unusable. Using temporary fallback area.");
+                        }
+
+                        const fallbackLocation = buildFallbackLocation();
+                        updateLocationDisplay(fallbackLocation);
+                        logResolvedLocation(fallbackLocation);
+                        resolve(fallbackLocation);
+                    },
+                    function (error) {
+                        console.error("Geolocation error:", error);
+                        setStatus("Unable to detect your location. Using temporary fallback area.");
+                        const fallbackLocation = buildFallbackLocation();
+                        updateLocationDisplay(fallbackLocation);
+                        logResolvedLocation(fallbackLocation);
+                        resolve(fallbackLocation);
+                    },
+                    {
+                        enableHighAccuracy: true,
+                        timeout: 10000,
+                        maximumAge: 0,
+                    }
+                );
+            });
+        };
+
+        const openMapsWindow = function (popupWindow, url) {
+            console.log("Final Google Maps URL:", url);
+            if (popupWindow && !popupWindow.closed) {
+                popupWindow.location.href = url;
+                return true;
+            }
+
+            const fallbackPopup = window.open(url, "_blank", "noopener,noreferrer");
+            return Boolean(fallbackPopup);
+        };
+
+        const runNearbyHospitalsAction = function () {
+            setButtonsBusy(true);
+            const popupWindow = window.open("", "_blank");
+            if (popupWindow && popupWindow.document) {
+                popupWindow.document.write("<title>Loading map...</title><p>Loading Google Maps...</p>");
+            }
+            setStatus("Detecting your current location...");
+
+            return resolveEmergencyLocation()
+                .then(function (resolvedLocation) {
+                    setStatus(
+                        resolvedLocation.source === "browser"
+                            ? "Using your current location."
+                            : "Using temporary fallback area: K\u0131r\u0131khan, Hatay."
+                    );
+
+                    const nearbyMapUrl = buildNearbyMapUrl(resolvedLocation.lat, resolvedLocation.lng);
+
+                    setStatus("Opening nearby hospitals in Google Maps...");
+                    if (!openMapsWindow(popupWindow, nearbyMapUrl)) {
+                        setStatus("Google Maps popup was blocked. Please allow popups and try again.");
+                        return;
+                    }
+                })
+                .catch(function (error) {
+                    console.error("Emergency location resolution failed:", error);
+                    setStatus("Opening nearby hospitals in Google Maps...");
+                    if (!openMapsWindow(popupWindow, GENERIC_NEARBY_MAP_URL)) {
+                        setStatus("Google Maps popup was blocked. Please allow popups and try again.");
+                    }
+                })
+                .finally(function () {
+                    setButtonsBusy(false);
+                });
+        };
+
+        nearbyBtn.addEventListener("click", function () {
+            console.log("Nearby button clicked");
+            runNearbyHospitalsAction();
+        });
+    });
 </script>
 {% endblock %}
