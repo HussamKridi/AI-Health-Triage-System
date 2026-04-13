@@ -1,787 +1,366 @@
 {% extends 'layout.html' %}
 {% block content %}
 <style>
-    :root {
-        --triage-ink: #18212f;
-        --triage-muted: #667085;
-        --triage-line: #d9e2ec;
-        --triage-panel: #ffffff;
-        --triage-surface: #f4f7fb;
-        --triage-question: #ebf3ff;
-        --triage-answer: #f8fafc;
-        --triage-accent: #0f4c81;
-        --triage-success: #15803d;
-        --triage-success-soft: #dcfce7;
-        --triage-danger: #b42318;
-        --triage-danger-soft: #fee4e2;
-        --triage-warning: #b54708;
-        --triage-warning-soft: #ffead5;
-    }
-
-    body {
-        background:
-            radial-gradient(circle at top left, rgba(15, 76, 129, 0.16), transparent 30%),
-            linear-gradient(180deg, #eef4f8 0%, #f8fafc 100%);
-        color: var(--triage-ink);
-    }
-
-    .triage-shell {
-        display: grid;
-        gap: 1.5rem;
-        grid-template-columns: minmax(0, 1.7fr) minmax(320px, 0.95fr);
-    }
-
-    .triage-panel {
-        background: var(--triage-panel);
-        border: 1px solid rgba(24, 33, 47, 0.08);
-        border-radius: 24px;
-        box-shadow: 0 18px 50px rgba(15, 23, 42, 0.08);
-        scroll-margin-top: 1.25rem;
-    }
-
-    .triage-header {
-        background: linear-gradient(135deg, #17324d 0%, #0f4c81 100%);
-        color: white;
-        border-radius: 24px;
-        padding: 1.4rem 1.5rem;
-    }
-
-    .triage-chip {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.4rem;
-        padding: 0.35rem 0.75rem;
-        border-radius: 999px;
-        font-size: 0.84rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
-    }
-
-    .triage-chip.low { background: var(--triage-success-soft); color: var(--triage-success); }
-    .triage-chip.high { background: var(--triage-danger-soft); color: var(--triage-danger); }
-    .triage-chip.progress { background: var(--triage-warning-soft); color: var(--triage-warning); }
-
-    .triage-summary,
-    .triage-grid {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 0.9rem;
-        padding: 1.2rem 1.5rem 1.4rem;
-        border-bottom: 1px solid var(--triage-line);
-    }
-
-    .triage-card {
-        background: var(--triage-surface);
-        border: 1px solid var(--triage-line);
-        border-radius: 18px;
-        padding: 1rem;
-    }
-
-    .triage-label {
-        color: var(--triage-muted);
-        font-size: 0.8rem;
-        font-weight: 700;
-        letter-spacing: 0.05em;
-        text-transform: uppercase;
-    }
-
-    .triage-value {
-        font-size: 1.25rem;
-        font-weight: 800;
-        margin-top: 0.35rem;
-    }
-
-    .triage-chat {
-        padding: 1.5rem;
-    }
-
-    .triage-thread {
-        display: flex;
-        flex-direction: column;
-        gap: 0.85rem;
-        max-height: 520px;
-        overflow-y: auto;
-        padding-right: 0.25rem;
-    }
-
-    .triage-message {
-        max-width: 90%;
-        border-radius: 20px;
-        padding: 1rem 1.05rem;
-        line-height: 1.5;
-    }
-
-    .triage-message.ai {
-        align-self: flex-start;
-        background: var(--triage-question);
-        border: 1px solid #c9dcfa;
-    }
-
-    .triage-message.user {
-        align-self: flex-end;
-        background: var(--triage-answer);
-        border: 1px solid #dbe4ee;
-    }
-
-    .triage-message.final {
-        max-width: 100%;
-        border: 1px solid #ffd29d;
-        background: linear-gradient(180deg, #fff7ed 0%, #ffffff 100%);
-    }
-
-    .triage-role {
-        font-size: 0.76rem;
-        font-weight: 800;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
-        margin-bottom: 0.35rem;
-        color: var(--triage-muted);
-    }
-
-    .triage-composer {
-        margin-top: 1.25rem;
-        padding-top: 1.1rem;
-        border-top: 1px solid var(--triage-line);
-    }
-
-    .triage-session-list {
-        display: flex;
-        flex-direction: column;
-        gap: 0.9rem;
-    }
-
-    .triage-session-card {
-        display: block;
-        text-decoration: none;
-        color: inherit;
-        background: var(--triage-panel);
-        border: 1px solid var(--triage-line);
-        border-radius: 18px;
-        padding: 1rem;
-    }
-
-    .triage-session-card.active {
-        border-color: #7bb0e8;
-        background: linear-gradient(180deg, #f6fbff 0%, #ffffff 100%);
-        box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
-    }
-
-    .triage-session-meta,
-    .triage-note {
-        color: var(--triage-muted);
-        font-size: 0.85rem;
-    }
-
-    .triage-empty {
-        padding: 2rem;
-        text-align: center;
-        color: var(--triage-muted);
-    }
-
-    .triage-emergency {
-        margin-top: 1rem;
-        border: 1px solid rgba(180, 35, 24, 0.22);
-        background: linear-gradient(180deg, #fff1f0 0%, #fff7f6 100%);
-        border-radius: 22px;
-        padding: 1.1rem 1.15rem;
-        box-shadow: 0 12px 30px rgba(180, 35, 24, 0.08);
-    }
-
-    .triage-emergency-title {
-        color: var(--triage-danger);
-        font-weight: 800;
-        letter-spacing: 0.03em;
-        text-transform: uppercase;
-        font-size: 0.8rem;
-        margin-bottom: 0.35rem;
-    }
-
-    .triage-emergency-number {
-        font-size: 1.9rem;
-        font-weight: 900;
-        color: var(--triage-danger);
-        line-height: 1;
-        margin: 0.4rem 0 0.75rem;
-    }
-
-    .triage-emergency-actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.75rem;
-        margin-top: 1rem;
-    }
-
-    .triage-emergency-button {
-        flex: 1 1 220px;
-        min-height: 52px;
-        border-radius: 14px;
-        font-weight: 700;
-    }
-
-    .triage-emergency-status {
-        display: none;
-        margin-top: 0.85rem;
-        padding: 0.8rem 0.9rem;
-        border-radius: 14px;
-        background: rgba(255, 255, 255, 0.72);
-        border: 1px solid rgba(180, 35, 24, 0.14);
-        color: var(--triage-danger);
-        font-size: 0.95rem;
-    }
-
-    .triage-emergency-status.visible {
-        display: block;
-    }
-
-    .triage-emergency-location {
-        margin-top: 0.85rem;
-        padding: 0.8rem 0.9rem;
-        border-radius: 14px;
-        background: rgba(255, 255, 255, 0.78);
-        border: 1px solid rgba(180, 35, 24, 0.12);
-        color: var(--triage-ink);
-        font-size: 0.95rem;
-    }
-
-    .triage-emergency-location strong {
-        display: block;
-        color: var(--triage-danger);
-        margin-bottom: 0.2rem;
-    }
-
-    @media (max-width: 991px) {
-        .triage-shell { grid-template-columns: 1fr; }
-        .triage-summary, .triage-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-        .triage-message { max-width: 100%; }
-    }
+:root{--ink:#19212d;--muted:#667085;--line:#d6dee8;--panel:rgba(255,255,255,.92);--surface:#f5f8fb;--accent:#0c5a88;--deep:#0b3554;--success:#157347;--success-soft:#ddf7e8;--danger:#b42318;--danger-soft:#ffe7e4;--warning:#b54708;--warning-soft:#fff0dc;--shadow:0 24px 60px rgba(15,23,42,.09)}
+body{background:radial-gradient(circle at top left,rgba(12,90,136,.15),transparent 24%),radial-gradient(circle at top right,rgba(180,71,8,.11),transparent 24%),linear-gradient(180deg,#edf3f8 0%,#f8fbfd 100%);color:var(--ink)}
+.triage-topbar,.triage-section-head,.triage-compare-row,.triage-hospital-title,.triage-hospital-actions,.triage-panel-actions,.triage-emergency-actions{display:flex;justify-content:space-between;gap:.8rem;flex-wrap:wrap}
+.triage-topbar{align-items:center;margin-bottom:1.5rem}.triage-section-head{align-items:start;padding:1.35rem 1.5rem 0}.triage-shell{display:grid;gap:1.5rem;grid-template-columns:minmax(0,1.7fr) minmax(340px,1fr)}.triage-column{display:flex;flex-direction:column;gap:1.5rem}
+.triage-panel{background:var(--panel);border:1px solid rgba(25,33,45,.08);border-radius:24px;box-shadow:var(--shadow);backdrop-filter:blur(8px);overflow:hidden;scroll-margin-top:1.25rem}
+.triage-header{padding:1.5rem;background:linear-gradient(135deg,var(--deep) 0%,var(--accent) 100%);color:#fff}.triage-eyebrow,.triage-kicker,.triage-label,.triage-role{font-size:.78rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.triage-eyebrow{margin-bottom:.2rem}.triage-role{margin-bottom:.35rem}.triage-chip,.triage-badge{display:inline-flex;align-items:center;justify-content:center;padding:.38rem .8rem;border-radius:999px;font-size:.8rem;font-weight:800;text-transform:uppercase;letter-spacing:.03em}
+.low,.stable,.better,.aligned,.positive{background:var(--success-soft);color:var(--success)}.high,.critical,.worse,.changed{background:var(--danger-soft);color:var(--danger)}.progress,.elevated,.mixed,.warning{background:var(--warning-soft);color:var(--warning)}.same,.neutral{background:#eef2f6;color:#475467}
+.triage-hero-grid,.triage-grid,.triage-comparison-grid,.triage-form-grid,.triage-insight-grid{display:grid;gap:.95rem;padding:1.25rem 1.5rem 1.5rem}.triage-hero-grid,.triage-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.triage-comparison-grid,.triage-insight-grid{grid-template-columns:repeat(2,minmax(0,1fr));padding:0}.triage-form-grid{grid-template-columns:repeat(2,minmax(0,1fr));padding:0}.wide{grid-column:span 2}
+.triage-card,.triage-signal-card,.triage-timeline-item,.triage-session-card,.triage-hospital-card,.triage-handover-box,.triage-compare-row,.triage-intake-feedback{background:#fff;border:1px solid var(--line);border-radius:18px;padding:1rem}.triage-card{background:var(--surface)}
+.triage-value{font-size:1.28rem;font-weight:900;margin-top:.35rem}.triage-subvalue,.triage-note,.triage-session-meta,.triage-helper{color:var(--muted);font-size:.9rem}
+.triage-section-body,.triage-chat{padding:1rem 1.5rem 1.5rem}.triage-story{display:grid;gap:1rem;grid-template-columns:1.15fr .95fr}.triage-signal-list,.triage-timeline,.triage-session-list,.triage-hospital-list,.triage-handover-points{display:flex;flex-direction:column;gap:.85rem}
+.triage-timeline-item{position:relative;padding-left:1.15rem}.triage-timeline-item::before{content:"";position:absolute;left:.4rem;top:1rem;bottom:-1rem;width:2px;background:var(--line)}.triage-timeline-item:last-child::before{display:none}
+.triage-thread{display:flex;flex-direction:column;gap:.85rem;max-height:520px;overflow-y:auto;padding-right:.25rem}.triage-message{max-width:90%;border-radius:20px;padding:1rem 1.05rem;line-height:1.5}.triage-message.ai{align-self:flex-start;background:#ebf4ff;border:1px solid #cfe0f6}.triage-message.user{align-self:flex-end;background:#f7fafc;border:1px solid #dbe4ee}.triage-message.final{max-width:100%;border:1px solid #ffe0b3;background:linear-gradient(180deg,#fff9ef 0%,#ffffff 100%)}
+.triage-composer{margin-top:1.25rem;padding-top:1.1rem;border-top:1px solid var(--line)}.triage-empty{padding:2rem;text-align:center;color:var(--muted)}.triage-empty.left{text-align:left;padding:0}
+.triage-intake-meter{height:10px;width:100%;border-radius:999px;background:#e8edf3;overflow:hidden;margin-bottom:1rem}.triage-intake-meter>span{display:block;height:100%;width:0;background:linear-gradient(90deg,#0c5a88 0%,#2d8fbe 100%);transition:width .2s ease}
+.triage-intake-item{display:flex;justify-content:space-between;gap:1rem;padding:.65rem 0;border-bottom:1px solid #edf2f7}.triage-intake-item:first-child{padding-top:0}.triage-intake-item:last-child{padding-bottom:0;border-bottom:0}
+.triage-emergency{margin-top:1rem;border:1px solid rgba(180,35,24,.22);background:linear-gradient(180deg,#fff1f0 0%,#fff7f6 100%);border-radius:22px;padding:1.1rem 1.15rem;box-shadow:0 12px 30px rgba(180,35,24,.08)}
+.triage-emergency-title{color:var(--danger);font-weight:800;letter-spacing:.03em;text-transform:uppercase;font-size:.8rem;margin-bottom:.35rem}.triage-emergency-number{font-size:1.9rem;font-weight:900;color:var(--danger);line-height:1;margin:.4rem 0 .75rem}
+.triage-emergency-button{flex:1 1 220px;min-height:52px;border-radius:14px;font-weight:700}.triage-emergency-status{display:none;margin-top:.85rem;padding:.8rem .9rem;border-radius:14px;background:rgba(255,255,255,.72);border:1px solid rgba(180,35,24,.14);color:var(--danger);font-size:.95rem}.triage-emergency-status.visible{display:block}
+.triage-emergency-location,.triage-hospital-results{margin-top:.85rem;padding:.9rem;border-radius:14px;background:rgba(255,255,255,.82);border:1px solid rgba(180,35,24,.12)}.triage-hospital-results[hidden]{display:none!important}.triage-hospital-distance{font-size:1.25rem;font-weight:900}
+.triage-session-card{text-decoration:none;color:inherit;transition:transform .18s ease,box-shadow .18s ease}.triage-session-card:hover{transform:translateY(-2px);box-shadow:0 14px 30px rgba(15,23,42,.08)}.triage-session-card.active{border-color:#84b8da;background:linear-gradient(180deg,#f4fbff 0%,#ffffff 100%)}
+@media (max-width:1199px){.triage-story{grid-template-columns:1fr}}@media (max-width:991px){.triage-shell,.triage-hero-grid,.triage-grid,.triage-form-grid,.triage-comparison-grid,.triage-insight-grid{grid-template-columns:1fr}.wide{grid-column:span 1}.triage-message{max-width:100%}}
+@media print{.btn,.triage-composer,.triage-panel-actions,.triage-emergency,.triage-session-list,.triage-topbar a{display:none!important}body{background:#fff}.triage-panel{box-shadow:none;border:1px solid #d0d5dd}}
 </style>
 
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="triage-topbar">
     <div>
+        <div class="triage-eyebrow">AI Health Triage</div>
         <h2 class="fw-bold mb-1">Patient Dashboard</h2>
         <div class="text-muted">Active patient: {{ patient_id }}</div>
     </div>
-    <a href="{{ url_for('routes.logout') }}" class="btn btn-outline-danger">Logout</a>
+    <div class="d-flex gap-2 flex-wrap">
+        <a href="{{ url_for('routes.dashboard', fresh=1) }}#intake-panel" class="btn btn-primary">Start New Questioning</a>
+        <a href="{{ url_for('routes.logout') }}" class="btn btn-outline-danger">Logout</a>
+    </div>
 </div>
 
 <div class="triage-shell">
-    <section class="triage-panel" id="active-triage">
-        {% if latest_vital %}
-            {% set status = latest_vital.triage_status or 'questioning' %}
-            {% set final_label = latest_triage.risk_label if latest_triage.type == 'final' else '' %}
-            <div class="triage-header">
-                <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
-                    <div>
-                        <div class="text-uppercase small fw-bold opacity-75 mb-2">Active Triage Session</div>
-                        <h3 class="mb-1">Session #{{ latest_vital.id }}</h3>
-                        <div class="opacity-75">Started {{ latest_vital.timestamp }}</div>
+    <div class="triage-column">
+        <section class="triage-panel" id="active-triage">
+            {% if latest_vital %}
+                {% set status = latest_vital.triage_status or 'questioning' %}
+                {% set final_label = latest_triage.risk_label if latest_triage.type == 'final' else '' %}
+                <div class="triage-header">
+                    <div class="triage-topbar">
+                        <div>
+                            <div class="triage-eyebrow text-white opacity-75">Active Triage Session</div>
+                            <h3 class="mb-1">Session #{{ active_session_number }}</h3>
+                            <div class="opacity-75">Started {{ latest_vital.timestamp }}</div>
+                        </div>
+                        <div class="d-flex gap-2 flex-wrap" id="triageStatusBadges">
+                            {% if status == 'completed' %}
+                                <span class="triage-chip {{ 'low' if final_label == 'low risk' else 'high' }}">{{ final_label }}</span>
+                            {% else %}
+                                <span class="triage-chip progress">Questioning</span>
+                            {% endif %}
+                            {% if reasoning_summary.agreement %}
+                                <span class="triage-badge {{ reasoning_summary.agreement }}">{{ 'Model aligned' if reasoning_summary.agreement == 'aligned' else 'AI changed baseline' }}</span>
+                            {% endif %}
+                        </div>
                     </div>
-                    {% if status == 'completed' %}
-                        <span class="triage-chip {{ 'low' if final_label == 'low risk' else 'high' }}">
-                            {{ final_label }}
-                        </span>
-                    {% else %}
-                        <span class="triage-chip progress">Questioning</span>
-                    {% endif %}
                 </div>
-            </div>
 
-            <div class="triage-grid">
-                <div class="triage-card">
-                    <div class="triage-label">Age</div>
-                    <div class="triage-value">{{ latest_vital.age }}</div>
+                <div class="triage-hero-grid">
+                    <div class="triage-card"><div class="triage-label">Age</div><div class="triage-value">{{ latest_vital.age }}</div></div>
+                    <div class="triage-card"><div class="triage-label">Gender</div><div class="triage-value">{{ latest_vital.gender }}</div></div>
+                    <div class="triage-card"><div class="triage-label">Weight</div><div class="triage-value">{{ latest_vital.weight }} kg</div></div>
+                    <div class="triage-card"><div class="triage-label">Height</div><div class="triage-value">{{ latest_vital.height }} m</div></div>
                 </div>
-                <div class="triage-card">
-                    <div class="triage-label">Gender</div>
-                    <div class="triage-value">{{ latest_vital.gender }}</div>
-                </div>
-                <div class="triage-card">
-                    <div class="triage-label">Weight</div>
-                    <div class="triage-value">{{ latest_vital.weight }} kg</div>
-                </div>
-                <div class="triage-card">
-                    <div class="triage-label">Height</div>
-                    <div class="triage-value">{{ latest_vital.height }} m</div>
-                </div>
-            </div>
 
-            <div class="triage-summary">
-                <div class="triage-card">
-                    <div class="triage-label">SpO2</div>
-                    <div class="triage-value">{{ latest_vital.spo2 }}%</div>
+                <div class="triage-grid">
+                    <div class="triage-card"><div class="triage-label">SpO2</div><div class="triage-value">{{ latest_vital.spo2 }}%</div></div>
+                    <div class="triage-card"><div class="triage-label">Temperature</div><div class="triage-value">{{ latest_vital.temperature }}&deg;C</div></div>
+                    <div class="triage-card"><div class="triage-label">Heart Rate</div><div class="triage-value">{{ latest_vital.heart_rate }} BPM</div></div>
+                    <div class="triage-card"><div class="triage-label">Model Background</div><div class="triage-value">{{ model_assessment.risk_label or 'pending' }}</div><div class="triage-subvalue">{{ ((model_assessment.high_risk_probability or 0) * 100)|round|int }}% high-risk probability</div></div>
                 </div>
-                <div class="triage-card">
-                    <div class="triage-label">Temperature</div>
-                    <div class="triage-value">{{ latest_vital.temperature }}&deg;C</div>
-                </div>
-                <div class="triage-card">
-                    <div class="triage-label">Heart Rate</div>
-                    <div class="triage-value">{{ latest_vital.heart_rate }} BPM</div>
-                </div>
-                <div class="triage-card">
-                    <div class="triage-label">Model Background</div>
-                    <div class="triage-value">{{ model_assessment.risk_label or 'pending' }}</div>
-                </div>
-            </div>
 
-            <div class="triage-chat">
-                <div class="d-flex justify-content-between align-items-center mb-3">
+                <div class="triage-section-head">
                     <div>
-                        <h5 class="mb-1">Triage Conversation</h5>
-                        <div class="triage-note">Gemini asks one follow-up question at a time. The final answer stays hidden until questioning is complete.</div>
+                        <h5 class="mb-1">Clinical Reasoning Overview</h5>
+                        <div class="triage-note">The frontend now explains the case, not only the final label.</div>
                     </div>
-                    <div class="triage-note">{{ latest_history|length }} answered</div>
                 </div>
-
-                <div class="triage-thread">
-                    {% for item in latest_history %}
-                        <div class="triage-message ai">
-                            <div class="triage-role">Assistant</div>
-                            {{ item.question }}
-                        </div>
-                        <div class="triage-message user">
-                            <div class="triage-role">Patient Reply</div>
-                            {{ item.answer }}
-                        </div>
-                    {% endfor %}
-
-                    {% if latest_triage.type == 'question' %}
-                        <div class="triage-message ai">
-                            <div class="triage-role">Current Question</div>
-                            {{ latest_triage.question }}
-                        </div>
-                    {% elif latest_triage.type == 'final' %}
-                        <div class="triage-message final">
-                            <div class="triage-role">Final Result</div>
-                            <p class="mb-2"><strong>Risk Result:</strong> {{ latest_triage.risk_label }}</p>
-                            <p class="mb-2"><strong>Urgency Level:</strong> {{ 'Crucial' if latest_triage.is_crucial else 'Not crucial' }}</p>
-                            <p class="mb-2"><strong>Explanation:</strong> {{ latest_triage.reasoning }}</p>
-                            <p class="mb-2"><strong>Advice:</strong> {{ latest_triage.advice }}</p>
-                            <p class="mb-0"><strong>Recommended Next Action:</strong> {{ latest_triage.recommended_next_action }}</p>
-                        </div>
-                        {% if latest_triage.risk_label == 'high risk' %}
-                            <section class="triage-emergency" id="emergency-assistance" aria-labelledby="emergency-assistance-title">
-                                <div class="triage-emergency-title" id="emergency-assistance-title">Emergency Assistance</div>
-                                <p class="mb-2"><strong>Your result indicates a high-risk condition.</strong> Please seek urgent medical attention.</p>
-                                <p class="mb-2">Your current location will be used to find nearby hospitals.</p>
-                                <div class="triage-emergency-number">112</div>
-                                <div class="triage-emergency-actions">
-                                    <a href="tel:112" class="btn btn-danger triage-emergency-button">Call Emergency (112)</a>
-                                    <button
-                                        type="button"
-                                        id="nearbyHospitalsBtn"
-                                        class="btn btn-outline-danger triage-emergency-button"
-                                        data-hospital-action="nearby"
-                                    >
-                                        Nearby Hospitals
-                                    </button>
-                                </div>
-                                <div class="triage-emergency-location" data-hospital-location hidden>
-                                    <strong data-hospital-location-label>Your current location</strong>
-                                    <span data-hospital-location-text>Location has not been requested yet.</span>
-                                </div>
-                                <div
-                                    class="triage-emergency-status"
-                                    id="hospitalLocationStatus"
-                                    data-hospital-status
-                                    role="status"
-                                    aria-live="polite"
-                                ></div>
-                            </section>
-                        {% endif %}
-                    {% else %}
-                        <div class="triage-empty">No triage response is available for this session.</div>
-                    {% endif %}
-                </div>
-
-                {% if latest_triage.type == 'question' %}
-                    <div class="triage-composer">
-                        <div class="small text-muted mb-3">Expected input: {{ latest_triage.input_type }}</div>
-                        {% if latest_triage.input_type == 'yes_no' %}
-                            <form action="{{ url_for('routes.submit_triage_answer', vital_id=latest_vital.id) }}" method="POST" class="d-flex gap-2 flex-wrap">
-                                <button type="submit" name="answer" value="yes" class="btn btn-danger px-4">Yes</button>
-                                <button type="submit" name="answer" value="no" class="btn btn-outline-secondary px-4">No</button>
-                            </form>
-                        {% elif latest_triage.input_type == 'multiple_choice' %}
-                            <form action="{{ url_for('routes.submit_triage_answer', vital_id=latest_vital.id) }}" method="POST" class="d-flex gap-2 flex-wrap">
-                                {% for option in latest_triage.options %}
-                                    <button type="submit" name="answer" value="{{ option }}" class="btn btn-outline-primary">{{ option }}</button>
+                <div class="triage-section-body">
+                    <div class="triage-story">
+                        <div>
+                            <div class="triage-kicker">Vitals Interpretation</div>
+                            <div class="triage-signal-list">
+                                {% for signal in reasoning_summary.signals %}
+                                    <div class="triage-signal-card">
+                                        <div class="triage-section-head" style="padding:0">
+                                            <div><h6 class="mb-1">{{ signal.label }}</h6><div class="triage-note">{{ signal.rationale }}</div></div>
+                                            <span class="triage-badge {{ signal.severity }}">{{ signal.severity }}</span>
+                                        </div>
+                                        <div class="triage-topbar mt-3" style="margin-bottom:0">
+                                            <div class="triage-value">{{ signal.value }}{{ signal.unit }}</div>
+                                            <div class="triage-helper">Expected range: {{ signal.normal_range }}</div>
+                                        </div>
+                                    </div>
                                 {% endfor %}
-                            </form>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="triage-kicker">Decision Timeline</div>
+                            <div class="triage-timeline">
+                                {% for item in reasoning_summary.timeline %}
+                                    <div class="triage-timeline-item">
+                                        <div class="triage-section-head" style="padding:0">
+                                            <strong>{{ item.title }}</strong>
+                                            <span class="triage-badge {{ item.tone }}">{{ item.tone }}</span>
+                                        </div>
+                                        <div class="triage-note mt-2">{{ item.detail }}</div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="triage-chat">
+                    <div class="triage-topbar">
+                        <div>
+                            <h5 class="mb-1">Triage Conversation</h5>
+                            <div class="triage-note">Gemini asks one follow-up question at a time. The final answer stays hidden until questioning is complete.</div>
+                        </div>
+                        <div class="triage-note" id="answeredCount">{{ latest_history|length }} answered</div>
+                    </div>
+                    <div class="triage-thread" id="triageThread">
+                        {% for item in latest_history %}
+                            <div class="triage-message ai"><div class="triage-role">Assistant</div>{{ item.question }}</div>
+                            <div class="triage-message user"><div class="triage-role">Patient Reply</div>{{ item.answer }}</div>
+                        {% endfor %}
+
+                        {% if latest_triage.type == 'question' %}
+                            <div class="triage-message ai"><div class="triage-role">Current Question</div>{{ latest_triage.question }}</div>
+                        {% elif latest_triage.type == 'final' %}
+                            <div class="triage-message final">
+                                <div class="triage-role">Final Result</div>
+                                <p class="mb-2"><strong>Risk Result:</strong> {{ latest_triage.risk_label }}</p>
+                                <p class="mb-2"><strong>Urgency Level:</strong> {{ 'Crucial' if latest_triage.is_crucial else 'Not crucial' }}</p>
+                                <p class="mb-2"><strong>Explanation:</strong> {{ latest_triage.reasoning }}</p>
+                                <p class="mb-2"><strong>Advice:</strong> {{ latest_triage.advice }}</p>
+                                <p class="mb-0"><strong>Recommended Next Action:</strong> {{ latest_triage.recommended_next_action }}</p>
+                            </div>
+                            {% if latest_triage.risk_label == 'high risk' %}
+                                <section class="triage-emergency" id="emergency-assistance" aria-labelledby="emergency-assistance-title">
+                                    <div class="triage-emergency-title" id="emergency-assistance-title">Emergency Assistance</div>
+                                    <p class="mb-2"><strong>Your result indicates a high-risk condition.</strong> Please seek urgent medical attention.</p>
+                                    <p class="mb-2">Your current location will be used to find nearby hospitals.</p>
+                                    <div class="triage-emergency-number">112</div>
+                                    <div class="triage-emergency-actions">
+                                        <a href="tel:112" class="btn btn-danger triage-emergency-button">Call Emergency (112)</a>
+                                        <button type="button" id="nearbyHospitalsBtn" class="btn btn-outline-danger triage-emergency-button" data-hospital-action="nearby">Nearby Hospitals</button>
+                                    </div>
+                                    <div class="triage-emergency-location" data-hospital-location hidden>
+                                        <strong data-hospital-location-label>Your current location</strong>
+                                        <span data-hospital-location-text>Location has not been requested yet.</span>
+                                    </div>
+                                    <div class="triage-emergency-status" id="hospitalLocationStatus" data-hospital-status role="status" aria-live="polite"></div>
+                                    <div class="triage-hospital-results" id="hospitalResults" hidden>
+                                        <div class="triage-topbar">
+                                            <div><strong>Nearby Hospitals</strong><div class="triage-note" id="hospitalResultsSummary">Searching around the resolved emergency location.</div></div>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary" id="refreshHospitalsBtn">Refresh</button>
+                                        </div>
+                                        <div class="triage-hospital-list" id="hospitalList"></div>
+                                    </div>
+                                </section>
+                            {% endif %}
                         {% else %}
-                            <form action="{{ url_for('routes.submit_triage_answer', vital_id=latest_vital.id) }}" method="POST" class="row g-2">
-                                <div class="col-md-9">
-                                    <input type="text" name="answer" class="form-control form-control-lg" placeholder="Type the patient's answer" required>
-                                </div>
-                                <div class="col-md-3">
-                                    <button type="submit" class="btn btn-primary btn-lg w-100">Send</button>
-                                </div>
-                            </form>
+                            <div class="triage-empty">No triage response is available for this session.</div>
                         {% endif %}
                     </div>
-                {% endif %}
-            </div>
-        {% else %}
-            <div class="triage-empty">
-                <h4 class="mb-2">No Triage Session Yet</h4>
-                <p class="mb-0">Submit patient information to begin the questioning flow.</p>
-            </div>
-        {% endif %}
-    </section>
 
-    <aside class="d-flex flex-column gap-4">
-        <section class="triage-panel p-4">
-            <div class="mb-3">
-                <h5 class="mb-1">Start New Session</h5>
-                <div class="triage-note">Collect all structured patient fields first. Gemini will then ask follow-up questions one at a time.</div>
-            </div>
-
-            <form action="{{ url_for('routes.start_triage') }}" method="POST" class="row g-3">
-                <div class="col-md-6">
-                    <label class="form-label fw-bold text-muted">Age</label>
-                    <input type="number" class="form-control" name="age" min="0" required>
+                    <div id="triageComposerWrap">
+                    {% if latest_triage.type == 'question' %}
+                        <div class="triage-composer" id="triageComposer">
+                            <div class="small text-muted mb-3">Expected response type: {{ session_input_label }}</div>
+                            {% if latest_triage.input_type == 'yes_no' %}
+                                <form action="{{ url_for('routes.submit_triage_answer', vital_id=latest_vital.id) }}" method="POST" class="d-flex gap-2 flex-wrap" data-async-answer="true">
+                                    <button type="submit" name="answer" value="yes" class="btn btn-danger px-4">Yes</button>
+                                    <button type="submit" name="answer" value="no" class="btn btn-outline-secondary px-4">No</button>
+                                </form>
+                            {% elif latest_triage.input_type == 'multiple_choice' %}
+                                <form action="{{ url_for('routes.submit_triage_answer', vital_id=latest_vital.id) }}" method="POST" class="d-flex gap-2 flex-wrap" data-async-answer="true">
+                                    {% for option in latest_triage.options %}
+                                        <button type="submit" name="answer" value="{{ option }}" class="btn btn-outline-primary">{{ option }}</button>
+                                    {% endfor %}
+                                </form>
+                            {% else %}
+                                <form action="{{ url_for('routes.submit_triage_answer', vital_id=latest_vital.id) }}" method="POST" class="row g-2" data-async-answer="true">
+                                    <div class="col-md-9"><input type="text" name="answer" class="form-control form-control-lg" placeholder="Type the patient's answer" required></div>
+                                    <div class="col-md-3"><button type="submit" class="btn btn-primary btn-lg w-100">Send</button></div>
+                                </form>
+                            {% endif %}
+                        </div>
+                    {% endif %}
+                    </div>
                 </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-bold text-muted">Gender</label>
-                    <select class="form-select" name="gender" required>
-                        <option value="">Select...</option>
-                        <option value="Male">Male</option>
-                        <option value="Female">Female</option>
-                        <option value="Other">Other</option>
-                    </select>
+            {% else %}
+                <div class="triage-empty">
+                    <h4 class="mb-2">{{ 'Start a New Questioning Session' if fresh_questioning else 'No Triage Session Yet' }}</h4>
+                    <p class="mb-0">{{ 'Previous answers are hidden. Fill in the intake form to begin a fresh questioning flow.' if fresh_questioning else 'Submit patient information to begin the questioning flow.' }}</p>
                 </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-bold text-muted">Weight (kg)</label>
-                    <input type="number" step="0.1" class="form-control" name="weight" required>
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-bold text-muted">Height (m)</label>
-                    <input type="number" step="0.01" class="form-control" name="height" required>
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label fw-bold text-muted">SpO2 (%)</label>
-                    <input type="number" step="0.1" class="form-control" name="spo2" required>
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label fw-bold text-muted">Temperature (&deg;C)</label>
-                    <input type="number" step="0.1" class="form-control" name="temperature" required>
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label fw-bold text-muted">Heart Rate (BPM)</label>
-                    <input type="number" class="form-control" name="heart_rate" required>
-                </div>
-                <div class="col-12">
-                    <button type="submit" class="btn btn-primary w-100 fw-bold">Begin Triage Questions</button>
-                </div>
-            </form>
+            {% endif %}
         </section>
 
-        <section class="triage-panel p-4">
-            <div class="d-flex justify-content-between align-items-center mb-3">
+        <section class="triage-panel" id="intake-panel">
+            <div class="triage-section-head">
+                <div>
+                    <h5 class="mb-1">Session Comparison</h5>
+                    <div class="triage-note">This shows whether the selected session looks better, worse, or unchanged relative to the previous one.</div>
+                </div>
+                {% if comparison.trend %}<span class="triage-badge {{ comparison.trend_tone }}">{{ comparison.trend }}</span>{% endif %}
+            </div>
+            <div class="triage-section-body">
+                <div class="triage-card mb-3">
+                    <strong>{{ comparison.headline }}</strong>
+                    {% if comparison.has_previous %}<div class="triage-note mt-2">Compared against session #{{ session_number_by_id.get(comparison.previous_session_id, comparison.previous_session_id) }} from {{ comparison.previous_timestamp }}.</div>{% endif %}
+                </div>
+                {% if comparison.rows %}
+                    <div class="triage-comparison-grid">
+                        {% for item in comparison.rows %}
+                            <div class="triage-compare-row">
+                                <div><strong>{{ item.label }}</strong><div class="triage-note">Previous {{ item.previous }}</div></div>
+                                <div class="text-end"><div class="triage-value fs-5">{{ item.current }}</div><span class="triage-badge {{ item.direction }}">{{ item.delta }}</span></div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="triage-empty left">Comparison data will appear after at least two sessions are recorded.</div>
+                {% endif %}
+            </div>
+        </section>
+    </div>
+    <aside class="triage-column">
+        <section class="triage-panel">
+            <div class="triage-section-head">
+                <div>
+                    <h5 class="mb-1">Smart Intake</h5>
+                    <div class="triage-note">This form now shows completeness, BMI, and quick clinical hints before questioning begins.</div>
+                </div>
+                <span class="triage-badge neutral" id="intakeProgressLabel">0% complete</span>
+            </div>
+            <div class="triage-section-body">
+                <div class="triage-intake-meter"><span id="intakeProgressBar"></span></div>
+                <form action="{{ url_for('routes.start_triage') }}" method="POST" class="triage-form-grid" id="intakeForm">
+                    <div><label class="form-label fw-bold text-muted">Age</label><input type="number" class="form-control" name="age" min="0" required value="{{ intake_defaults.age }}"></div>
+                    <div>
+                        <label class="form-label fw-bold text-muted">Gender</label>
+                        <select class="form-select" name="gender" required>
+                            <option value="">Select...</option>
+                            <option value="Male" {% if intake_defaults.gender == 'Male' %}selected{% endif %}>Male</option>
+                            <option value="Female" {% if intake_defaults.gender == 'Female' %}selected{% endif %}>Female</option>
+                            <option value="Other" {% if intake_defaults.gender == 'Other' %}selected{% endif %}>Other</option>
+                        </select>
+                    </div>
+                    <div><label class="form-label fw-bold text-muted">Weight (kg)</label><input type="number" step="0.1" class="form-control" name="weight" required value="{{ intake_defaults.weight }}"></div>
+                    <div><label class="form-label fw-bold text-muted">Height (m)</label><input type="number" step="0.01" class="form-control" name="height" required value="{{ intake_defaults.height }}"></div>
+                    <div><label class="form-label fw-bold text-muted">SpO2 (%)</label><input type="number" step="0.1" class="form-control" name="spo2" required value="{{ intake_defaults.spo2 }}"></div>
+                    <div><label class="form-label fw-bold text-muted">Temperature (&deg;C)</label><input type="number" step="0.1" class="form-control" name="temperature" required value="{{ intake_defaults.temperature }}"></div>
+                    <div class="wide"><label class="form-label fw-bold text-muted">Heart Rate (BPM)</label><input type="number" class="form-control" name="heart_rate" required value="{{ intake_defaults.heart_rate }}"></div>
+                    <div class="wide triage-intake-feedback">
+                        <div class="triage-topbar">
+                            <div><strong>Live Intake Guidance</strong><div class="triage-note">Use this as quick support before starting a new triage session.</div></div>
+                            <span class="triage-badge neutral" id="bmiBadge">BMI pending</span>
+                        </div>
+                        <div class="triage-handover-points mt-3">
+                            <div class="triage-intake-item"><span>Oxygen saturation</span><strong id="spo2Hint">Waiting for input</strong></div>
+                            <div class="triage-intake-item"><span>Temperature</span><strong id="tempHint">Waiting for input</strong></div>
+                            <div class="triage-intake-item"><span>Heart rate</span><strong id="hrHint">Waiting for input</strong></div>
+                        </div>
+                    </div>
+                    <div class="wide"><button type="submit" class="btn btn-primary w-100 fw-bold">Begin Triage Questions</button></div>
+                </form>
+            </div>
+        </section>
+
+        <section class="triage-panel">
+            <div class="triage-section-head">
+                <div>
+                    <h5 class="mb-1">Clinical Handover Summary</h5>
+                    <div class="triage-note">A one-screen summary for nurse or doctor handoff, with a print-friendly layout.</div>
+                </div>
+                <div class="triage-panel-actions">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="copyHandoverBtn">Copy</button>
+                    <button type="button" class="btn btn-primary btn-sm" onclick="window.print()">Print</button>
+                </div>
+            </div>
+            <div class="triage-section-body">
+                {% if latest_vital %}
+                    <div class="triage-handover-box">
+                        <div class="triage-kicker">Ready For Handover</div>
+                        <div class="triage-note mb-3">Session #{{ active_session_number }} for patient {{ patient_id }}{% if latest_triage.type == 'final' %} with final classification {{ latest_triage.risk_label }}.{% else %} is still in questioning.{% endif %}</div>
+                        <textarea class="form-control" id="handoverSummaryText" rows="8" readonly>{{ reasoning_summary.handover_summary }}</textarea>
+                    </div>
+                {% else %}
+                    <div class="triage-empty left">Handover text will appear after the first triage session starts.</div>
+                {% endif %}
+            </div>
+        </section>
+
+        <section class="triage-panel">
+            <div class="triage-section-head">
                 <div>
                     <h5 class="mb-1">Sessions</h5>
                     <div class="triage-note">Questioning sessions stay in progress until Gemini returns a final answer.</div>
                 </div>
                 <span class="badge text-bg-light">{{ vitals|length }}</span>
             </div>
-
-            {% if vitals %}
-                <div class="triage-session-list">
-                    {% for vital in vitals %}
-                        {% set session_status = vital.triage_status or 'questioning' %}
-                        {% set item_classification = vital.classification|lower if vital.classification else '' %}
-                        <a href="{{ url_for('routes.dashboard', triage_id=vital.id) }}" class="triage-session-card {{ 'active' if selected_vital_id == vital.id else '' }}">
-                            <div class="d-flex justify-content-between align-items-start gap-3">
-                                <div>
-                                    <div class="fw-bold">Session #{{ vital.id }}</div>
-                                    <div class="triage-session-meta">{{ vital.timestamp }}</div>
+            <div class="triage-section-body">
+                {% if vitals %}
+                    <div class="triage-session-list">
+                        {% for vital in vitals %}
+                            {% set session_status = vital.triage_status or 'questioning' %}
+                            {% set item_classification = vital.classification|lower if vital.classification else '' %}
+                            <a href="{{ url_for('routes.dashboard', triage_id=vital.id) }}" class="triage-session-card {{ 'active' if selected_vital_id == vital.id else '' }}">
+                                <div class="triage-topbar">
+                                    <div><div class="fw-bold">Session #{{ session_number_by_id.get(vital.id, vital.id) }}</div><div class="triage-session-meta">{{ vital.timestamp }}</div></div>
+                                    {% if session_status == 'completed' %}
+                                        <span class="triage-chip {{ 'low' if item_classification == 'low risk' else 'high' }}">{{ vital.classification }}</span>
+                                    {% else %}
+                                        <span class="triage-chip progress">Questioning</span>
+                                    {% endif %}
                                 </div>
-                                {% if session_status == 'completed' %}
-                                    <span class="triage-chip {{ 'low' if item_classification == 'low risk' else 'high' }}">{{ vital.classification }}</span>
-                                {% else %}
-                                    <span class="triage-chip progress">Questioning</span>
-                                {% endif %}
-                            </div>
-                            <div class="triage-session-meta mt-3">
-                                Age {{ vital.age }} | {{ vital.gender }} | SpO2 {{ vital.spo2 }}% | Temp {{ vital.temperature }}&deg;C | HR {{ vital.heart_rate }}
-                            </div>
-                        </a>
-                    {% endfor %}
-                </div>
-            {% else %}
-                <div class="triage-empty px-0 py-3 text-start">No sessions recorded for this patient yet.</div>
-            {% endif %}
+                                <div class="triage-session-meta mt-3">Age {{ vital.age }} | {{ vital.gender }} | SpO2 {{ vital.spo2 }}% | Temp {{ vital.temperature }}&deg;C | HR {{ vital.heart_rate }}</div>
+                            </a>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="triage-empty left">No sessions recorded for this patient yet.</div>
+                {% endif %}
+            </div>
         </section>
     </aside>
 </div>
 
 <script>
-    (function () {
-        const activeTriage = document.getElementById("active-triage");
-        if (!activeTriage) {
-            return;
-        }
+(function(){const activeTriage=document.getElementById("active-triage");if(!activeTriage){return}const shouldFocusTriage=function(){return window.location.hash==="#active-triage"||new URLSearchParams(window.location.search).has("triage_id")};const focusAnswerControl=function(){const answerInput=activeTriage.querySelector("input[name='answer']");if(answerInput&&typeof answerInput.focus==="function"){answerInput.focus({preventScroll:true});return}const answerButton=activeTriage.querySelector("button[name='answer']");if(answerButton&&typeof answerButton.focus==="function"){answerButton.focus({preventScroll:true})}};const jumpToActiveTriage=function(){if(!shouldFocusTriage()){return}activeTriage.scrollIntoView({block:"start",behavior:"auto"});focusAnswerControl()};if("scrollRestoration" in history){history.scrollRestoration="manual"}window.addEventListener("load",function(){jumpToActiveTriage();requestAnimationFrame(jumpToActiveTriage);window.setTimeout(jumpToActiveTriage,120)});window.addEventListener("pageshow",jumpToActiveTriage);window.addEventListener("hashchange",jumpToActiveTriage)})();
 
-        const shouldFocusTriage = function () {
-            return (
-                window.location.hash === "#active-triage" ||
-                new URLSearchParams(window.location.search).has("triage_id")
-            );
-        };
-
-        const focusAnswerControl = function () {
-            const answerInput = activeTriage.querySelector("input[name='answer']");
-            if (answerInput && typeof answerInput.focus === "function") {
-                answerInput.focus({ preventScroll: true });
-                return;
-            }
-
-            const answerButton = activeTriage.querySelector("button[name='answer']");
-            if (answerButton && typeof answerButton.focus === "function") {
-                answerButton.focus({ preventScroll: true });
-            }
-        };
-
-        const jumpToActiveTriage = function () {
-            if (!shouldFocusTriage()) {
-                return;
-            }
-
-            activeTriage.scrollIntoView({ block: "start", behavior: "auto" });
-            focusAnswerControl();
-        };
-
-        if ("scrollRestoration" in history) {
-            history.scrollRestoration = "manual";
-        }
-
-        window.addEventListener("load", function () {
-            jumpToActiveTriage();
-            requestAnimationFrame(jumpToActiveTriage);
-            window.setTimeout(jumpToActiveTriage, 120);
-        });
-
-        window.addEventListener("pageshow", jumpToActiveTriage);
-        window.addEventListener("hashchange", jumpToActiveTriage);
-    })();
-
-    document.addEventListener("DOMContentLoaded", function () {
-        console.log("Emergency assistance script initialized");
-
-        const emergencySection = document.getElementById("emergency-assistance");
-        const nearbyBtn = document.getElementById("nearbyHospitalsBtn");
-        const statusBox = document.getElementById("hospitalLocationStatus");
-        const locationBox = document.querySelector("[data-hospital-location]");
-        const locationLabel = document.querySelector("[data-hospital-location-label]");
-        const locationText = document.querySelector("[data-hospital-location-text]");
-
-        if (!emergencySection || !nearbyBtn || !statusBox || !locationBox || !locationLabel || !locationText) {
-            console.log("Emergency assistance elements not found; skipping setup");
-            return;
-        }
-
-        const EMERGENCY_FALLBACK_LOCATION = Object.freeze({
-            lat: 36.49940,
-            lng: 36.35760,
-            source: "fallback",
-            label: "Using temporary fallback area: K\u0131r\u0131khan, Hatay",
-        });
-        const GENERIC_NEARBY_MAP_URL = "https://www.google.com/maps/search/hospitals+near+me";
-        const KNOWN_STALE_BROWSER_LOCATION = Object.freeze({
-            lat: 40.22184,
-            lng: 28.84319,
-        });
-        const MAX_BROWSER_LOCATION_AGE_MS = 30000;
-        const STALE_LOCATION_EPSILON = 0.01;
-
-        const setStatus = function (message) {
-            statusBox.textContent = message || "";
-            statusBox.classList.toggle("visible", Boolean(message));
-        };
-
-        const setButtonsBusy = function (isBusy) {
-            nearbyBtn.disabled = Boolean(isBusy);
-        };
-
-        const showLocationState = function (label, text) {
-            locationBox.hidden = false;
-            locationLabel.textContent = label;
-            locationText.textContent = text;
-        };
-
-        const updateLocationDisplay = function (resolvedLocation) {
-            showLocationState(
-                resolvedLocation.source === "browser"
-                    ? "Using your current location"
-                    : "Using temporary fallback area: K\u0131r\u0131khan, Hatay",
-                "Lat " + resolvedLocation.lat.toFixed(5) + ", Lng " + resolvedLocation.lng.toFixed(5)
-            );
-        };
-
-        const buildNearbyMapUrl = function (latitude, longitude) {
-            return "https://www.google.com/maps/search/hospitals/@" + encodeURIComponent(latitude) + "," + encodeURIComponent(longitude) + ",15z";
-        };
-
-        const isFiniteCoordinate = function (value) {
-            return typeof value === "number" && Number.isFinite(value);
-        };
-
-        const matchesKnownStaleBrowserLocation = function (latitude, longitude) {
-            return Math.abs(latitude - KNOWN_STALE_BROWSER_LOCATION.lat) <= STALE_LOCATION_EPSILON
-                && Math.abs(longitude - KNOWN_STALE_BROWSER_LOCATION.lng) <= STALE_LOCATION_EPSILON;
-        };
-
-        const isUsableBrowserLocation = function (position) {
-            const latitude = position && position.coords ? position.coords.latitude : null;
-            const longitude = position && position.coords ? position.coords.longitude : null;
-            if (!isFiniteCoordinate(latitude) || !isFiniteCoordinate(longitude)) {
-                return false;
-            }
-
-            if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
-                return false;
-            }
-
-            if (typeof position.timestamp === "number" && (Date.now() - position.timestamp) > MAX_BROWSER_LOCATION_AGE_MS) {
-                console.warn("Ignoring stale browser geolocation timestamp.", position.timestamp);
-                return false;
-            }
-
-            if (matchesKnownStaleBrowserLocation(latitude, longitude)) {
-                console.warn("Ignoring known stale browser geolocation.", latitude, longitude);
-                return false;
-            }
-
-            return true;
-        };
-
-        const logResolvedLocation = function (resolvedLocation) {
-            console.log("Resolved latitude:", resolvedLocation.lat);
-            console.log("Resolved longitude:", resolvedLocation.lng);
-            console.log("Resolved source:", resolvedLocation.source);
-        };
-
-        const buildFallbackLocation = function () {
-            return {
-                lat: EMERGENCY_FALLBACK_LOCATION.lat,
-                lng: EMERGENCY_FALLBACK_LOCATION.lng,
-                source: EMERGENCY_FALLBACK_LOCATION.source,
-                label: EMERGENCY_FALLBACK_LOCATION.label,
-            };
-        };
-
-        const resolveEmergencyLocation = function () {
-            showLocationState("Resolving location", "Requesting fresh browser geolocation...");
-
-            if (!navigator.geolocation) {
-                setStatus("Geolocation is not supported by this browser. Using temporary fallback area.");
-                const fallbackLocation = buildFallbackLocation();
-                updateLocationDisplay(fallbackLocation);
-                logResolvedLocation(fallbackLocation);
-                return Promise.resolve(fallbackLocation);
-            }
-
-            setStatus("Detecting your location...");
-
-            return new Promise(function (resolve) {
-                navigator.geolocation.getCurrentPosition(
-                    function (position) {
-                        const latitude = position && position.coords ? position.coords.latitude : null;
-                        const longitude = position && position.coords ? position.coords.longitude : null;
-
-                        if (isUsableBrowserLocation(position)) {
-                            const browserLocation = {
-                                lat: latitude,
-                                lng: longitude,
-                                source: "browser",
-                                label: "Using your current location",
-                            };
-                            updateLocationDisplay(browserLocation);
-                            logResolvedLocation(browserLocation);
-                            resolve(browserLocation);
-                            return;
-                        }
-
-                        if (matchesKnownStaleBrowserLocation(latitude, longitude)) {
-                            setStatus("Browser location returned stale Bursa coordinates. Using temporary fallback area.");
-                        } else {
-                            setStatus("Fresh browser location was unusable. Using temporary fallback area.");
-                        }
-
-                        const fallbackLocation = buildFallbackLocation();
-                        updateLocationDisplay(fallbackLocation);
-                        logResolvedLocation(fallbackLocation);
-                        resolve(fallbackLocation);
-                    },
-                    function (error) {
-                        console.error("Geolocation error:", error);
-                        setStatus("Unable to detect your location. Using temporary fallback area.");
-                        const fallbackLocation = buildFallbackLocation();
-                        updateLocationDisplay(fallbackLocation);
-                        logResolvedLocation(fallbackLocation);
-                        resolve(fallbackLocation);
-                    },
-                    {
-                        enableHighAccuracy: true,
-                        timeout: 10000,
-                        maximumAge: 0,
-                    }
-                );
-            });
-        };
-
-        const openMapsWindow = function (popupWindow, url) {
-            console.log("Final Google Maps URL:", url);
-            if (popupWindow && !popupWindow.closed) {
-                popupWindow.location.href = url;
-                return true;
-            }
-
-            const fallbackPopup = window.open(url, "_blank", "noopener,noreferrer");
-            return Boolean(fallbackPopup);
-        };
-
-        const runNearbyHospitalsAction = function () {
-            setButtonsBusy(true);
-            const popupWindow = window.open("", "_blank");
-            if (popupWindow && popupWindow.document) {
-                popupWindow.document.write("<title>Loading map...</title><p>Loading Google Maps...</p>");
-            }
-            setStatus("Detecting your current location...");
-
-            return resolveEmergencyLocation()
-                .then(function (resolvedLocation) {
-                    setStatus(
-                        resolvedLocation.source === "browser"
-                            ? "Using your current location."
-                            : "Using temporary fallback area: K\u0131r\u0131khan, Hatay."
-                    );
-
-                    const nearbyMapUrl = buildNearbyMapUrl(resolvedLocation.lat, resolvedLocation.lng);
-
-                    setStatus("Opening nearby hospitals in Google Maps...");
-                    if (!openMapsWindow(popupWindow, nearbyMapUrl)) {
-                        setStatus("Google Maps popup was blocked. Please allow popups and try again.");
-                        return;
-                    }
-                })
-                .catch(function (error) {
-                    console.error("Emergency location resolution failed:", error);
-                    setStatus("Opening nearby hospitals in Google Maps...");
-                    if (!openMapsWindow(popupWindow, GENERIC_NEARBY_MAP_URL)) {
-                        setStatus("Google Maps popup was blocked. Please allow popups and try again.");
-                    }
-                })
-                .finally(function () {
-                    setButtonsBusy(false);
-                });
-        };
-
-        nearbyBtn.addEventListener("click", function () {
-            console.log("Nearby button clicked");
-            runNearbyHospitalsAction();
-        });
-    });
+document.addEventListener("DOMContentLoaded",function(){
+const intakeForm=document.getElementById("intakeForm"),progressBar=document.getElementById("intakeProgressBar"),progressLabel=document.getElementById("intakeProgressLabel"),bmiBadge=document.getElementById("bmiBadge"),spo2Hint=document.getElementById("spo2Hint"),tempHint=document.getElementById("tempHint"),hrHint=document.getElementById("hrHint");
+const setHint=function(element,text,tone){if(!element){return}element.textContent=text;element.className="";element.classList.add("triage-badge",tone||"neutral")};
+const updateIntakeInsights=function(){if(!intakeForm){return}const fields=Array.from(intakeForm.querySelectorAll("input, select")).filter(function(field){return field.name});const completed=fields.filter(function(field){return String(field.value||"").trim()!==""}).length;const percentage=Math.round(completed/fields.length*100);if(progressBar){progressBar.style.width=percentage+"%"}if(progressLabel){progressLabel.textContent=percentage+"% complete"}const weight=parseFloat(intakeForm.elements.weight.value),height=parseFloat(intakeForm.elements.height.value);if(Number.isFinite(weight)&&Number.isFinite(height)&&height>0){const bmi=weight/(height*height);let bmiLabel="BMI normal: "+bmi.toFixed(1),bmiTone="stable";if(bmi<18.5){bmiLabel="BMI underweight: "+bmi.toFixed(1);bmiTone="warning"}else if(bmi>=25){bmiLabel="BMI above normal: "+bmi.toFixed(1);bmiTone="elevated"}bmiBadge.textContent=bmiLabel;bmiBadge.className="triage-badge "+bmiTone}else if(bmiBadge){bmiBadge.textContent="BMI pending";bmiBadge.className="triage-badge neutral"}const spo2=parseFloat(intakeForm.elements.spo2.value),temperature=parseFloat(intakeForm.elements.temperature.value),heartRate=parseFloat(intakeForm.elements.heart_rate.value);if(!Number.isFinite(spo2)){setHint(spo2Hint,"Waiting for input","neutral")}else if(spo2<=92){setHint(spo2Hint,"Critical oxygen reading","critical")}else if(spo2<=94){setHint(spo2Hint,"Below normal range","elevated")}else{setHint(spo2Hint,"Within normal range","stable")}if(!Number.isFinite(temperature)){setHint(tempHint,"Waiting for input","neutral")}else if(temperature>=39||temperature<35.5){setHint(tempHint,"High concern temperature","critical")}else if(temperature>=37.8){setHint(tempHint,"Possible fever","elevated")}else{setHint(tempHint,"Within expected range","stable")}if(!Number.isFinite(heartRate)){setHint(hrHint,"Waiting for input","neutral")}else if(heartRate>=120||heartRate<=45){setHint(hrHint,"Critical heart-rate range","critical")}else if(heartRate>=100||heartRate<=55){setHint(hrHint,"Outside resting range","elevated")}else{setHint(hrHint,"Within expected range","stable")}};
+if(intakeForm){intakeForm.addEventListener("input",updateIntakeInsights);intakeForm.addEventListener("change",updateIntakeInsights);updateIntakeInsights()}
+const copyBtn=document.getElementById("copyHandoverBtn"),handoverText=document.getElementById("handoverSummaryText");if(copyBtn&&handoverText){copyBtn.addEventListener("click",function(){handoverText.select();handoverText.setSelectionRange(0,handoverText.value.length);navigator.clipboard.writeText(handoverText.value).then(function(){copyBtn.textContent="Copied";window.setTimeout(function(){copyBtn.textContent="Copy"},1600)}).catch(function(){copyBtn.textContent="Select text manually";window.setTimeout(function(){copyBtn.textContent="Copy"},1800)})})}
+const patientId={{ patient_id|tojson }},activeVitalId={{ latest_vital.id if latest_vital else 'null' }},thread=document.getElementById("triageThread"),composerWrap=document.getElementById("triageComposerWrap"),answeredCount=document.getElementById("answeredCount"),statusBadges=document.getElementById("triageStatusBadges");
+const escapeHtml=function(value){return String(value==null?"":value).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;")};
+const LABEL_CURRENT="Current"+" Question",LABEL_FINAL="Final"+" Result",LABEL_EMERGENCY="Emergency"+" Assistance",LABEL_NEARBY="Nearby"+" Hospitals",EMERGENCY_HREF="tel"+":"+"112";
+const displayInputType=function(inputType){const normalized=String(inputType||"").trim().toLowerCase();if(normalized==="yes_no"){return "Yes or No"}if(normalized==="multiple_choice"){return "Multiple Choice"}if(normalized==="text"){return "Short Text Response"}return "Response"};
+const focusLatestAnswerControl=function(){if(!composerWrap){return}const answerInput=composerWrap.querySelector("input[name='answer']");if(answerInput&&typeof answerInput.focus==="function"){answerInput.focus({preventScroll:true});return}const answerButton=composerWrap.querySelector("button[name='answer'], button[type='submit']");if(answerButton&&typeof answerButton.focus==="function"){answerButton.focus({preventScroll:true})}};
+const scrollThreadToBottom=function(){if(thread){thread.scrollTop=thread.scrollHeight}};
+const renderStatusBadges=function(payload){if(!statusBadges){return}const modelLabel=payload.model_assessment&&payload.model_assessment.risk_label?payload.model_assessment.risk_label:"";const triageResponse=payload.triage_response||{};let html="";if(payload.triage_status==="completed"&&triageResponse.risk_label){html+='<span class="triage-chip '+(triageResponse.risk_label==="low risk"?"low":"high")+'">'+escapeHtml(triageResponse.risk_label)+'</span>'}else{html+='<span class="triage-chip progress">Questioning</span>'}if(payload.triage_status==="completed"&&triageResponse.risk_label&&modelLabel){html+='<span class="triage-badge '+(triageResponse.risk_label===modelLabel?"aligned":"changed")+'">'+(triageResponse.risk_label===modelLabel?"Model aligned":"AI changed baseline")+"</span>"}statusBadges.innerHTML=html};
+const renderEmergencySection=function(){return '<section class="triage-emergency" id="emergency-assistance" aria-labelledby="emergency-assistance-title"><div class="triage-emergency-title" id="emergency-assistance-title">'+LABEL_EMERGENCY+'</div><p class="mb-2"><strong>Your result indicates a high-risk condition.</strong> Please seek urgent medical attention.</p><p class="mb-2">Your current location will be used to find nearby hospitals.</p><div class="triage-emergency-number">112</div><div class="triage-emergency-actions"><a href="'+EMERGENCY_HREF+'" class="btn btn-danger triage-emergency-button">Call Emergency (112)</a><button type="button" id="nearbyHospitalsBtn" class="btn btn-outline-danger triage-emergency-button" data-hospital-action="nearby">'+LABEL_NEARBY+'</button></div><div class="triage-emergency-location" data-hospital-location hidden><strong data-hospital-location-label>Your current location</strong><span data-hospital-location-text>Location has not been requested yet.</span></div><div class="triage-emergency-status" id="hospitalLocationStatus" data-hospital-status role="status" aria-live="polite"></div><div class="triage-hospital-results" id="hospitalResults" hidden><div class="triage-topbar"><div><strong>'+LABEL_NEARBY+'</strong><div class="triage-note" id="hospitalResultsSummary">Searching around the resolved emergency location.</div></div><button type="button" class="btn btn-sm btn-outline-secondary" id="refreshHospitalsBtn">Refresh</button></div><div class="triage-hospital-list" id="hospitalList"></div></div></section>'};
+const renderThread=function(payload){if(!thread){return}const history=Array.isArray(payload.conversation_history)?payload.conversation_history:[];const triageResponse=payload.triage_response||{};let html="";history.forEach(function(item){html+='<div class="triage-message ai"><div class="triage-role">Assistant</div>'+escapeHtml(item.question)+'</div>';html+='<div class="triage-message user"><div class="triage-role">Patient Reply</div>'+escapeHtml(item.answer)+'</div>'});if(triageResponse.type==="question"){html+='<div class="triage-message ai"><div class="triage-role">'+LABEL_CURRENT+'</div>'+escapeHtml(triageResponse.question)+'</div>'}else if(triageResponse.type==="final"){html+='<div class="triage-message final"><div class="triage-role">'+LABEL_FINAL+'</div><p class="mb-2"><strong>Risk Result:</strong> '+escapeHtml(triageResponse.risk_label)+'</p><p class="mb-2"><strong>Urgency Level:</strong> '+(triageResponse.is_crucial?"Crucial":"Not crucial")+'</p><p class="mb-2"><strong>Explanation:</strong> '+escapeHtml(triageResponse.reasoning)+'</p><p class="mb-2"><strong>Advice:</strong> '+escapeHtml(triageResponse.advice)+'</p><p class="mb-0"><strong>Recommended Next Action:</strong> '+escapeHtml(triageResponse.recommended_next_action)+'</p></div>';if(triageResponse.risk_label==="high risk"){html+=renderEmergencySection()}}thread.innerHTML=html;scrollThreadToBottom();initEmergencySection()};
+const renderComposer=function(triageResponse){if(!composerWrap){return}if(!triageResponse||triageResponse.type!=="question"){composerWrap.innerHTML="";return}let formHtml='';if(triageResponse.input_type==="yes_no"){formHtml='<form action="#" method="POST" class="d-flex gap-2 flex-wrap" data-async-answer="true"><button type="submit" name="answer" value="yes" class="btn btn-danger px-4">Yes</button><button type="submit" name="answer" value="no" class="btn btn-outline-secondary px-4">No</button></form>'}else if(triageResponse.input_type==="multiple_choice"){formHtml='<form action="#" method="POST" class="d-flex gap-2 flex-wrap" data-async-answer="true">'+(triageResponse.options||[]).map(function(option){return '<button type="submit" name="answer" value="'+escapeHtml(option)+'" class="btn btn-outline-primary">'+escapeHtml(option)+'</button>'}).join("")+'</form>'}else{formHtml='<form action="#" method="POST" class="row g-2" data-async-answer="true"><div class="col-md-9"><input type="text" name="answer" class="form-control form-control-lg" placeholder="Type the patient answer" required></div><div class="col-md-3"><button type="submit" class="btn btn-primary btn-lg w-100">Send</button></div></form>'}composerWrap.innerHTML='<div class="triage-composer" id="triageComposer"><div class="small text-muted mb-3">Expected response type: '+escapeHtml(displayInputType(triageResponse.input_type))+'</div>'+formHtml+'</div>';focusLatestAnswerControl()};
+const updateAnsweredCount=function(payload){if(answeredCount){const total=(Array.isArray(payload.conversation_history)?payload.conversation_history.length:0);answeredCount.textContent=total+" answered"}};
+const setFormBusy=function(form,isBusy){Array.from(form.querySelectorAll("button,input")).forEach(function(element){element.disabled=Boolean(isBusy)})};
+document.addEventListener("submit",function(event){const form=event.target;if(!form.matches("[data-async-answer='true']")){return}event.preventDefault();if(!activeVitalId){return}let answer="";if(event.submitter&&event.submitter.name==="answer"){answer=event.submitter.value}else{const input=form.querySelector("input[name='answer']");answer=input?input.value.trim():""}if(!answer){return}setFormBusy(form,true);fetch("/api/vitals/"+encodeURIComponent(activeVitalId)+"/triage",{method:"POST",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({patient_id:patientId,answer:answer})}).then(function(response){if(!response.ok){throw new Error("Unable to continue triage.")}return response.json()}).then(function(payload){renderStatusBadges(payload);renderThread(payload);renderComposer(payload.triage_response);updateAnsweredCount(payload)}).catch(function(){setFormBusy(form,false);window.alert("Unable to submit the answer right now. Please try again.")})});
+const initEmergencySection=function(){const emergencySection=document.getElementById("emergency-assistance"),nearbyBtn=document.getElementById("nearbyHospitalsBtn"),refreshBtn=document.getElementById("refreshHospitalsBtn"),statusBox=document.getElementById("hospitalLocationStatus"),locationBox=document.querySelector("[data-hospital-location]"),locationLabel=document.querySelector("[data-hospital-location-label]"),locationText=document.querySelector("[data-hospital-location-text]"),hospitalResults=document.getElementById("hospitalResults"),hospitalList=document.getElementById("hospitalList"),hospitalResultsSummary=document.getElementById("hospitalResultsSummary");if(!emergencySection||!nearbyBtn||!statusBox||!locationBox||!locationLabel||!locationText||emergencySection.dataset.initialized==="true"){return}emergencySection.dataset.initialized="true";const FALLBACK=Object.freeze({lat:36.49940,lng:36.35760,source:"fallback",label:"Using temporary fallback area: K\u0131r\u0131khan, Hatay"}),STALE=Object.freeze({lat:40.22184,lng:28.84319}),AGE_MS=30000,EPS=.01;let lastResolvedLocation=null;const setStatus=function(message){statusBox.textContent=message||"";statusBox.classList.toggle("visible",Boolean(message))};const setButtonsBusy=function(isBusy){nearbyBtn.disabled=Boolean(isBusy);if(refreshBtn){refreshBtn.disabled=Boolean(isBusy)}};const showLocationState=function(label,text){locationBox.hidden=false;locationLabel.textContent=label;locationText.textContent=text};const updateLocationDisplay=function(loc){showLocationState(loc.source==="browser"?"Using your current location":"Using temporary fallback area: K\u0131r\u0131khan, Hatay","Lat "+loc.lat.toFixed(5)+", Lng "+loc.lng.toFixed(5))};const mapsSearchUrl=function(latitude,longitude){return "https://www.google.com/maps/search/hospitals/@"+encodeURIComponent(latitude)+","+encodeURIComponent(longitude)+",15z"};const isFiniteCoordinate=function(value){return typeof value==="number"&&Number.isFinite(value)};const matchesStale=function(latitude,longitude){return Math.abs(latitude-STALE.lat)<=EPS&&Math.abs(longitude-STALE.lng)<=EPS};const isUsableLocation=function(position){const latitude=position&&position.coords?position.coords.latitude:null,longitude=position&&position.coords?position.coords.longitude:null;if(!isFiniteCoordinate(latitude)||!isFiniteCoordinate(longitude)){return false}if(latitude<-90||latitude>90||longitude<-180||longitude>180){return false}if(typeof position.timestamp==="number"&&(Date.now()-position.timestamp)>AGE_MS){return false}if(matchesStale(latitude,longitude)){return false}return true};const fallbackLocation=function(){return {lat:FALLBACK.lat,lng:FALLBACK.lng,source:FALLBACK.source,label:FALLBACK.label}};const resolveEmergencyLocation=function(){showLocationState("Resolving location","Requesting fresh browser geolocation...");if(!navigator.geolocation){setStatus("Geolocation is not supported by this browser. Using temporary fallback area.");const fallback=fallbackLocation();updateLocationDisplay(fallback);return Promise.resolve(fallback)}setStatus("Detecting your location...");return new Promise(function(resolve){navigator.geolocation.getCurrentPosition(function(position){const latitude=position&&position.coords?position.coords.latitude:null,longitude=position&&position.coords?position.coords.longitude:null;if(isUsableLocation(position)){const browserLocation={lat:latitude,lng:longitude,source:"browser",label:"Using your current location"};updateLocationDisplay(browserLocation);resolve(browserLocation);return}setStatus(matchesStale(latitude,longitude)?"Browser location returned stale Bursa coordinates. Using temporary fallback area.":"Fresh browser location was unusable. Using temporary fallback area.");const fallback=fallbackLocation();updateLocationDisplay(fallback);resolve(fallback)},function(){setStatus("Unable to detect your location. Using temporary fallback area.");const fallback=fallbackLocation();updateLocationDisplay(fallback);resolve(fallback)},{enableHighAccuracy:true,timeout:10000,maximumAge:0})})};const renderHospitals=function(payload,resolvedLocation){if(!hospitalResults||!hospitalList||!hospitalResultsSummary){return}hospitalResults.hidden=false;hospitalList.innerHTML="";const hospitals=Array.isArray(payload.hospitals)?payload.hospitals:[];hospitalResultsSummary.textContent=hospitals.length?"Showing "+hospitals.length+" hospitals around "+resolvedLocation.lat.toFixed(3)+", "+resolvedLocation.lng.toFixed(3)+".":(payload.message||"No nearby hospitals were found for the selected search area.");if(!hospitals.length){const emptyState=document.createElement("div");emptyState.className="triage-hospital-card";const text=document.createElement("div");text.textContent=payload.message||"No nearby hospitals were found for the selected search area.";emptyState.appendChild(text);if(payload.fallback_map_url){const actions=document.createElement("div");actions.className="triage-hospital-actions mt-3";const fallbackLink=document.createElement("a");fallbackLink.className="btn btn-sm btn-primary";fallbackLink.target="_blank";fallbackLink.rel="noopener noreferrer";fallbackLink.href=payload.fallback_map_url;fallbackLink.textContent="Open Google Maps";actions.appendChild(fallbackLink);emptyState.appendChild(actions)}hospitalList.appendChild(emptyState);return}hospitals.forEach(function(hospital){const card=document.createElement("div");card.className="triage-hospital-card";const titleRow=document.createElement("div");titleRow.className="triage-hospital-title";const wrap=document.createElement("div"),title=document.createElement("strong"),address=document.createElement("div"),distance=document.createElement("div"),actions=document.createElement("div"),mapLink=document.createElement("a"),routeLink=document.createElement("a");title.textContent=hospital.name||"Nearby hospital";address.className="triage-note mt-1";address.textContent=hospital.address||"Address unavailable";distance.className="triage-hospital-distance";distance.textContent=hospital.distance_meters+" m";actions.className="triage-hospital-actions mt-3";mapLink.className="btn btn-sm btn-outline-primary";mapLink.target="_blank";mapLink.rel="noopener noreferrer";mapLink.href=mapsSearchUrl(hospital.lat,hospital.lng);mapLink.textContent="Open map";routeLink.className="btn btn-sm btn-primary";routeLink.target="_blank";routeLink.rel="noopener noreferrer";routeLink.href="https://www.google.com/maps/dir/"+encodeURIComponent(resolvedLocation.lat+","+resolvedLocation.lng)+"/"+encodeURIComponent(hospital.lat+","+hospital.lng);routeLink.textContent="Get route";wrap.appendChild(title);wrap.appendChild(address);titleRow.appendChild(wrap);titleRow.appendChild(distance);actions.appendChild(mapLink);actions.appendChild(routeLink);card.appendChild(titleRow);card.appendChild(actions);hospitalList.appendChild(card)})};const fetchHospitals=function(resolvedLocation){lastResolvedLocation=resolvedLocation;setStatus("Looking up nearby hospitals...");return fetch("/api/nearby-hospitals?lat="+encodeURIComponent(resolvedLocation.lat)+"&lng="+encodeURIComponent(resolvedLocation.lng)).then(function(response){if(!response.ok){throw new Error("Nearby hospital lookup failed.")}return response.json()}).then(function(payload){renderHospitals(payload,resolvedLocation);if(payload.mode==="maps_fallback"){setStatus("Live hospital lookup is unavailable. Google Maps fallback is ready.")}else{setStatus(payload.fallback_used?"Hospital list loaded for the temporary fallback area.":"Nearby hospitals loaded successfully.")}}).catch(function(){setStatus("Unable to lookup nearby hospitals right now.");if(hospitalResults&&hospitalList&&hospitalResultsSummary){hospitalResults.hidden=false;hospitalList.innerHTML="";hospitalResultsSummary.textContent="Nearby hospitals could not be loaded.";const emptyState=document.createElement("div");emptyState.className="triage-hospital-card";emptyState.textContent="The hospital lookup service is unavailable right now.";hospitalList.appendChild(emptyState)}})};const runNearbyHospitalsAction=function(reuseLastLocation){setButtonsBusy(true);const locationPromise=reuseLastLocation&&lastResolvedLocation?Promise.resolve(lastResolvedLocation):resolveEmergencyLocation();return locationPromise.then(function(resolvedLocation){return fetchHospitals(resolvedLocation)}).finally(function(){setButtonsBusy(false)})};nearbyBtn.addEventListener("click",function(){runNearbyHospitalsAction(false)});if(refreshBtn){refreshBtn.addEventListener("click",function(){runNearbyHospitalsAction(true)})}};
+initEmergencySection();
+});
 </script>
 {% endblock %}

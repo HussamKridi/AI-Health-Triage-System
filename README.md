@@ -12,16 +12,24 @@ A Flask-based medical triage dashboard that combines a local scikit-learn classi
 ## How to Run Locally
 
 1. Install Python 3.10+.
-2. Create a virtual environment: `python -m venv .venv`
-3. Activate it on Windows: `.\.venv\Scripts\activate`
-4. Install dependencies: `pip install -r requirements.txt`
+2. If your Windows username contains non-ASCII characters and `python app.py` fails from a virtualenv, create an ASCII alias first:
+   `New-Item -ItemType Junction -Path .python-home -Target "$env:LOCALAPPDATA\Programs\Python\Python310"`
+3. Create a virtual environment:
+   `.\.python-home\python.exe -m venv .venv`
+   If you do not hit the Unicode path issue, `python -m venv .venv` also works.
+4. Install dependencies with the venv interpreter:
+   `.\.venv\Scripts\python.exe -m pip install -r requirements.txt`
+   If PowerShell allows script activation on your machine, `.\.venv\Scripts\Activate.ps1` is optional.
 5. Add your key to `.env`:
    `GEMINI_API_KEY=your_actual_api_key_here`
-6. Train the local model: `python train_model.py`
-7. Start the app: `python app.py`
+6. Train the local model:
+   `.\.venv\Scripts\python.exe train_model.py`
+7. Start the app:
+   `.\.venv\Scripts\python.exe app.py`
+   On this machine, plain `python app.py` also works without activating the venv.
 
 ## Run Tests
 
 Run the automated tests with:
 
-`python -m unittest discover -s tests`
+`.\.venv\Scripts\python.exe -m unittest discover -s tests`

@@ -13,6 +13,7 @@ api_bp = Blueprint("api", __name__)
 OVERPASS_API_URL = os.getenv("OVERPASS_API_URL", "https://overpass-api.de/api/interpreter")
 HOSPITAL_SEARCH_RADIUS_METERS = int(os.getenv("HOSPITAL_SEARCH_RADIUS_METERS", "12000"))
 DEFAULT_HOSPITAL_LIMIT = int(os.getenv("HOSPITAL_LIMIT", "5"))
+GENERIC_NEARBY_MAP_URL = "https://www.google.com/maps/search/hospitals+near+me"
 
 
 def _parse_payload(data):
@@ -116,6 +117,22 @@ def lookup_nearby_hospitals(lat, lng, limit=DEFAULT_HOSPITAL_LIMIT):
         },
         "hospitals": hospitals,
         "fallback_used": False,
+    }
+
+
+def build_hospital_lookup_fallback(lat, lng):
+    return {
+        "status": "success",
+        "origin": {
+            "label": "Resolved emergency location",
+            "lat": float(lat),
+            "lng": float(lng),
+        },
+        "hospitals": [],
+        "fallback_used": True,
+        "mode": "maps_fallback",
+        "message": "Live hospital lookup is unavailable right now. You can still open nearby hospitals in Google Maps.",
+        "fallback_map_url": GENERIC_NEARBY_MAP_URL,
     }
 
 
@@ -245,7 +262,7 @@ def nearby_hospitals():
     try:
         result = lookup_nearby_hospitals(lat, lng)
     except Exception:
-        return jsonify({"error": "Unable to lookup nearby hospitals right now"}), 502
+        return jsonify(build_hospital_lookup_fallback(lat, lng))
 
     if not result.get("hospitals"):
         return jsonify(
@@ -256,6 +273,7 @@ def nearby_hospitals():
                 "fallback_used": bool(result.get("fallback_used")),
                 "mode": result.get("mode", "unknown"),
                 "message": "No nearby hospitals were found for the selected search area.",
+                "fallback_map_url": result.get("fallback_map_url"),
             }
         )
 
@@ -266,5 +284,6 @@ def nearby_hospitals():
             "hospitals": result["hospitals"],
             "fallback_used": bool(result.get("fallback_used")),
             "mode": result.get("mode", "live_location"),
+            "fallback_map_url": result.get("fallback_map_url"),
         }
     )

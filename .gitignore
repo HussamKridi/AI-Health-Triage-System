@@ -2,3 +2,5 @@
 __pycache__/
 database.db
 .venv/
+.python-home/
+.venv_broken_unicode_backup/

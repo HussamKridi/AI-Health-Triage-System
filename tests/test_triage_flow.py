@@ -277,6 +277,17 @@ class TriageFlowTests(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("error", response.get_json())
 
+    def test_api_nearby_hospitals_returns_maps_fallback_when_lookup_fails(self):
+        with patch.object(api, "lookup_nearby_hospitals", side_effect=RuntimeError("service down")):
+            response = self.client.get("/api/nearby-hospitals?lat=36.201&lng=36.161")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["mode"], "maps_fallback")
+        self.assertTrue(payload["fallback_used"])
+        self.assertEqual(payload["hospitals"], [])
+        self.assertIn("fallback_map_url", payload)
+
     def test_dashboard_shows_final_result_only_after_completion(self):
         with self.client.session_transaction() as session:
             session["patient_id"] = "PAT-FOCUS"
